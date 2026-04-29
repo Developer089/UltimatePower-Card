@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8" />
+<title>UltimatePower Card — mockup</title>
+<style>
+  :root {
+    --up-bg: #0d0d12;
+    --up-card-bg: #15151c;
+    --up-text: #f5f5fa;
+    --up-muted: #6a6a78;
+    --up-pv: #ff9b1f;
+    --up-pv-glow: rgba(255, 155, 31, 0.45);
+    --up-grid: #e8e8ee;
+    --up-grid-glow: rgba(232, 232, 238, 0.30);
+    --up-battery: #3ddc97;
+    --up-battery-glow: rgba(61, 220, 151, 0.40);
+    --up-house: #4ea8ff;
+    --up-house-glow: rgba(78, 168, 255, 0.40);
+    --up-appliance: #6ec5ff;
+  }
+  html, body {
+    background: var(--up-bg);
+    color: var(--up-text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    margin: 0;
+    padding: 24px;
+  }
+  h1 { font-weight: 500; font-size: 20px; margin: 0 0 6px; }
+  .subtitle { color: var(--up-muted); font-size: 13px; margin-bottom: 24px; }
+
+  .card {
+    width: 720px;
+    background: var(--up-card-bg);
+    border-radius: 16px;
+    padding: 24px;
+    position: relative;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+
+  .card-grid {
+    display: grid;
+    grid-template-rows: auto auto auto auto;
+    gap: 14px;
+    position: relative;
+  }
+
+  /* ------- Bublina (kruh) ------- */
+  .bubble {
+    position: relative;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.15s, filter 0.15s;
+  }
+  .bubble:hover { transform: scale(1.05); filter: brightness(1.15); }
+
+  .bubble.size-l { width: 96px; height: 96px; border: 3px solid; }
+  .bubble.size-m { width: 76px; height: 76px; border: 2.5px solid; }
+  .bubble.size-s { width: 56px; height: 56px; border: 2px solid; }
+
+  .bubble svg { width: 28px; height: 28px; fill: currentColor; }
+  .bubble.size-s svg { width: 22px; height: 22px; }
+  .bubble.size-m svg { width: 24px; height: 24px; }
+
+  .bubble .val {
+    position: absolute;
+    top: calc(100% + 4px);
+    font-size: 12px;
+    color: currentColor;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .bubble .extra {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    font-size: 11px;
+    color: var(--up-muted);
+    white-space: nowrap;
+  }
+
+  .bubble.pv { color: var(--up-pv); box-shadow: 0 0 18px var(--up-pv-glow) inset, 0 0 12px var(--up-pv-glow); }
+  .bubble.grid { color: var(--up-grid); box-shadow: 0 0 18px var(--up-grid-glow) inset, 0 0 10px var(--up-grid-glow); }
+  .bubble.battery { color: var(--up-battery); box-shadow: 0 0 18px var(--up-battery-glow) inset, 0 0 12px var(--up-battery-glow); }
+  .bubble.house { color: var(--up-house); box-shadow: 0 0 22px var(--up-house-glow) inset, 0 0 14px var(--up-house-glow); }
+  .bubble.appliance { color: var(--up-appliance); box-shadow: 0 0 10px rgba(110,197,255,0.25); }
+
+  .bubble.inactive { opacity: 0.35; }
+
+  /* ------- Řady (PV nahoře, baterie dole) ------- */
+  .row {
+    display: flex;
+    justify-content: center;
+    gap: 28px;
+    padding: 24px 0;
+  }
+
+  /* ------- Hlavní kříž ------- */
+  .main-cross {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    align-items: center;
+    justify-items: center;
+    min-height: 220px;
+    position: relative;
+  }
+
+  /* ------- Appliance fan kolem House ------- */
+  .house-cluster {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .appliance-fan {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .appliance-fan .bubble {
+    position: absolute;
+    pointer-events: auto;
+  }
+
+  /* ------- SVG flow lines (pod bublinami) ------- */
+  .flows {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    width: 100%;
+    height: 100%;
+  }
+  .flow-line {
+    fill: none;
+    stroke-width: 1.5;
+    opacity: 0.5;
+  }
+  .flow-line.pv      { stroke: var(--up-pv); }
+  .flow-line.grid    { stroke: var(--up-grid); }
+  .flow-line.battery { stroke: var(--up-battery); }
+  .flow-line.house   { stroke: var(--up-house); }
+
+  .flow-dot {
+    r: 3.5;
+    fill: currentColor;
+  }
+  .flow-dot.pv      { fill: var(--up-pv); filter: drop-shadow(0 0 4px var(--up-pv)); }
+  .flow-dot.grid    { fill: var(--up-grid); filter: drop-shadow(0 0 4px var(--up-grid)); }
+  .flow-dot.battery { fill: var(--up-battery); filter: drop-shadow(0 0 4px var(--up-battery)); }
+  .flow-dot.house   { fill: var(--up-house); filter: drop-shadow(0 0 4px var(--up-house)); }
+
+  /* ------- Battery SoC progress kolem bubliny ------- */
+  .soc-ring {
+    position: absolute;
+    inset: -6px;
+    transform: rotate(-90deg);
+    pointer-events: none;
+  }
+  .soc-ring circle {
+    fill: none;
+    stroke-width: 3;
+    stroke-linecap: round;
+  }
+  .soc-ring .track { stroke: rgba(255,255,255,0.06); }
+  .soc-ring .progress { stroke: var(--up-battery); }
+
+  /* ------- Grouping label ------- */
+  .row-label {
+    position: absolute;
+    left: 0;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--up-muted);
+  }
+
+  .legend {
+    margin-top: 32px;
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--up-muted);
+  }
+  .legend .item { display: flex; align-items: center; gap: 6px; }
+  .legend .swatch { width: 12px; height: 12px; border-radius: 50%; border: 2px solid; }
+</style>
+</head>
+<body>
+
+<h1>UltimatePower Card — vizuální mockup</h1>
+<div class="subtitle">3× PV string · 4× baterie · 6 spotřebičů · animované toky energie</div>
+
+<div class="card">
+  <div class="card-grid">
+
+    <!-- TOP: PV řada -->
+    <div class="row" style="position:relative;">
+      <div class="bubble pv size-m">
+        <svg viewBox="0 0 24 24"><path d="M3 21h18v-2H3v2zM6.5 17l1-9h9l1 9h-11zM7.5 7L9 3h6l1.5 4h-9z"/></svg>
+        <div class="extra">Východ</div>
+        <div class="val">2.1 kW</div>
+      </div>
+      <div class="bubble pv size-l">
+        <svg viewBox="0 0 24 24"><path d="M3 21h18v-2H3v2zM6.5 17l1-9h9l1 9h-11zM7.5 7L9 3h6l1.5 4h-9z"/></svg>
+        <div class="extra">93,1 kWh dnes</div>
+        <div class="val">7.5 kW</div>
+      </div>
+      <div class="bubble pv size-m">
+        <svg viewBox="0 0 24 24"><path d="M3 21h18v-2H3v2zM6.5 17l1-9h9l1 9h-11zM7.5 7L9 3h6l1.5 4h-9z"/></svg>
+        <div class="extra">Západ</div>
+        <div class="val">3.4 kW</div>
+      </div>
+    </div>
+
+    <!-- STŘED: Grid ↔ House s appliance fanem -->
+    <div class="main-cross">
+
+      <!-- LEVÁ: Grid -->
+      <div class="bubble grid size-l">
+        <svg viewBox="0 0 24 24"><path d="M11 19h2v3h-2v-3zM4 8l4-6h8l4 6-4 6h-3v3h-2v-3H8L4 8zm5 0l2 3h2l2-3-2-3h-2L9 8z"/></svg>
+        <div class="val">↓ 1.7 kW</div>
+      </div>
+
+      <!-- STŘED: spacer (vizuální místo pro hub) -->
+      <div></div>
+
+      <!-- PRAVÁ: House cluster s appliance fanem -->
+      <div class="house-cluster">
+        <div class="bubble house size-l">
+          <svg viewBox="0 0 24 24"><path d="M12 3l9 8h-2v9h-5v-6h-4v6H5v-9H3l9-8z"/></svg>
+          <div class="val">9.2 kW</div>
+        </div>
+
+        <!-- 6 appliance kolem domu (radiálně, 60° intervaly) -->
+        <div class="appliance-fan">
+          <!-- 0° vpravo -->
+          <div class="bubble appliance size-s" style="top:50%; left:100%; transform:translate(-50%,-50%);">
+            <svg viewBox="0 0 24 24"><path d="M19 8H5l1 14h12l1-14zM5 6h14V4H5v2z"/></svg>
+            <div class="extra">Boiler</div>
+            <div class="val">1.1 kW</div>
+          </div>
+          <!-- 60° -->
+          <div class="bubble appliance size-s" style="top:18%; left:90%; transform:translate(-50%,-50%);">
+            <svg viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg>
+            <div class="extra">EV</div>
+            <div class="val">3.6 kW</div>
+          </div>
+          <!-- 120° -->
+          <div class="bubble appliance size-s" style="top:18%; left:10%; transform:translate(-50%,-50%);">
+            <svg viewBox="0 0 24 24"><path d="M22 11h-4l1.5-3H17l-2 4h2v3h-3l3-4h-2.5l-2.5 5h2v3h-3l4-5H8l4-5H6l5-7v6h6l5 3z"/></svg>
+            <div class="extra">Klima</div>
+            <div class="val">0.8 kW</div>
+          </div>
+          <!-- 180° -->
+          <div class="bubble appliance size-s inactive" style="top:50%; left:0%; transform:translate(-50%,-50%);">
+            <svg viewBox="0 0 24 24"><path d="M6 2h12v3H6zm-2 5h16v15H4z"/></svg>
+            <div class="extra">Pračka</div>
+            <div class="val">0 W</div>
+          </div>
+          <!-- 240° -->
+          <div class="bubble appliance size-s" style="top:82%; left:10%; transform:translate(-50%,-50%);">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke-width="2" stroke="currentColor" fill="none"/><path d="M12 7v6l3 2" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+            <div class="extra">Kuchyň</div>
+            <div class="val">0.4 kW</div>
+          </div>
+          <!-- 300° -->
+          <div class="bubble appliance size-s" style="top:82%; left:90%; transform:translate(-50%,-50%);">
+            <svg viewBox="0 0 24 24"><path d="M3 13h2l3-9h8l3 9h2v8H3v-8zm5-6l-2 6h12l-2-6H8z"/></svg>
+            <div class="extra">Server</div>
+            <div class="val">0.3 kW</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SVG překryv s flow lines (zjednodušený) -->
+      <svg class="flows" viewBox="0 0 720 220" preserveAspectRatio="none">
+        <!-- PV → House (oranžová, shora dolů přes střed) -->
+        <path id="p-pv-house" class="flow-line pv" d="M360 0 C 360 60, 540 100, 540 110" />
+        <!-- Grid → House (bílá) -->
+        <path id="p-grid-house" class="flow-line grid" d="M180 110 L 540 110" />
+        <!-- PV → Battery (oranžová, shora dolů) -->
+        <path id="p-pv-bat" class="flow-line pv" d="M360 0 C 360 80, 360 160, 360 220" />
+        <!-- Battery → House -->
+        <path id="p-bat-house" class="flow-line battery" d="M360 220 C 540 220, 540 130, 540 110" />
+
+        <!-- Animované puntíky -->
+        <circle class="flow-dot pv">
+          <animateMotion dur="2.5s" repeatCount="indefinite">
+            <mpath href="#p-pv-house"/>
+          </animateMotion>
+        </circle>
+        <circle class="flow-dot pv">
+          <animateMotion dur="2.5s" begin="0.8s" repeatCount="indefinite">
+            <mpath href="#p-pv-house"/>
+          </animateMotion>
+        </circle>
+        <circle class="flow-dot grid">
+          <animateMotion dur="3s" repeatCount="indefinite">
+            <mpath href="#p-grid-house"/>
+          </animateMotion>
+        </circle>
+        <circle class="flow-dot pv">
+          <animateMotion dur="3s" begin="0.5s" repeatCount="indefinite">
+            <mpath href="#p-pv-bat"/>
+          </animateMotion>
+        </circle>
+      </svg>
+    </div>
+
+    <!-- BOTTOM: Battery řada -->
+    <div class="row" style="position:relative;">
+      <div class="bubble battery size-m" style="position:relative;">
+        <svg class="soc-ring" viewBox="0 0 100 100">
+          <circle class="track" cx="50" cy="50" r="46"/>
+          <circle class="progress" cx="50" cy="50" r="46"
+                  stroke-dasharray="289" stroke-dashoffset="14"/>
+        </svg>
+        <svg viewBox="0 0 24 24"><path d="M7 4v3H5v15h14V7h-2V4h-3V2h-4v2H7zm0 5h10v11H7V9zm2 2v7h6v-7H9z" transform="rotate(180 12 12)"/></svg>
+        <div class="extra">95 %</div>
+        <div class="val">↑ 1.2 kW</div>
+      </div>
+
+      <div class="bubble battery size-m" style="position:relative;">
+        <svg class="soc-ring" viewBox="0 0 100 100">
+          <circle class="track" cx="50" cy="50" r="46"/>
+          <circle class="progress" cx="50" cy="50" r="46"
+                  stroke-dasharray="289" stroke-dashoffset="38"/>
+        </svg>
+        <svg viewBox="0 0 24 24"><path d="M7 4v3H5v15h14V7h-2V4h-3V2h-4v2H7z" /></svg>
+        <div class="extra">87 %</div>
+        <div class="val">↑ 1.0 kW</div>
+      </div>
+
+      <div class="bubble battery size-m" style="position:relative;">
+        <svg class="soc-ring" viewBox="0 0 100 100">
+          <circle class="track" cx="50" cy="50" r="46"/>
+          <circle class="progress" cx="50" cy="50" r="46"
+                  stroke-dasharray="289" stroke-dashoffset="26"/>
+        </svg>
+        <svg viewBox="0 0 24 24"><path d="M7 4v3H5v15h14V7h-2V4h-3V2h-4v2H7z" /></svg>
+        <div class="extra">91 %</div>
+        <div class="val">↑ 1.1 kW</div>
+      </div>
+
+      <div class="bubble battery size-m inactive" style="position:relative;">
+        <svg class="soc-ring" viewBox="0 0 100 100">
+          <circle class="track" cx="50" cy="50" r="46"/>
+          <circle class="progress" cx="50" cy="50" r="46"
+                  stroke-dasharray="289" stroke-dashoffset="260"/>
+        </svg>
+        <svg viewBox="0 0 24 24"><path d="M7 4v3H5v15h14V7h-2V4h-3V2h-4v2H7z" /></svg>
+        <div class="extra">10 %</div>
+        <div class="val">0 W</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="legend">
+    <div class="item"><div class="swatch" style="border-color:var(--up-pv);"></div>FVE výroba</div>
+    <div class="item"><div class="swatch" style="border-color:var(--up-grid);"></div>Síť</div>
+    <div class="item"><div class="swatch" style="border-color:var(--up-battery);"></div>Baterie (s SoC)</div>
+    <div class="item"><div class="swatch" style="border-color:var(--up-house);"></div>Dům</div>
+    <div class="item"><div class="swatch" style="border-color:var(--up-appliance);"></div>Spotřebiče</div>
+  </div>
+</div>
+
+<p style="color:var(--up-muted); margin-top:18px; font-size:12px;">
+  Mockup je statický (HTML/CSS/SVG); produkční verze bude LitElement custom card s reaktivními daty z Home Assistant entit.
+</p>
+
+</body>
+</html>

@@ -1,0 +1,22 @@
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node
+node_modules/
+*.log
+
+# Build outputs — released as GH release assets, not committed
+dist/
+build/
+
+# Local-only working notes (kept out of public repo)
+.local/
+*.local.md
+.scratch/
