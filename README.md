@@ -47,7 +47,6 @@ Minimal example:
 type: custom:ultimate-power-card
 name: My Power
 grid_entity: sensor.grid_power
-house_entity: sensor.house_consumption
 
 pv_strings:
   - { power_entity: sensor.pv_east, name: East }
@@ -64,6 +63,8 @@ appliances:
   - { power_entity: sensor.heatpump_power,  name: HP,      icon: mdi:heat-pump }
   - { power_entity: sensor.kitchen_circuit, name: Kuchyň,  icon: mdi:silverware-fork-knife }
 ```
+
+There is no house sensor to configure. The card derives the house load from the energy balance: `PV + grid + battery`, where grid is positive on import and battery is positive on discharge. On the consumption side you only list the individual appliances.
 
 Full options reference will live in [`docs/configuration.md`](docs/configuration.md) once the v0.1 schema is locked.
 

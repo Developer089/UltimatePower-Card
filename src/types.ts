@@ -34,7 +34,6 @@ export interface UltimatePowerCardConfig extends LovelaceCardConfig {
   // Hubs
   grid_entity: string;
   grid_export_entity?: string;
-  house_entity: string;
   pv_total_entity?: string;
   battery_total_entity?: string;
   battery_total_soc_entity?: string;

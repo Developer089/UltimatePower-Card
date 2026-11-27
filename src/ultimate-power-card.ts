@@ -33,8 +33,8 @@ export class UltimatePowerCard extends LitElement {
   @state() private _config?: UltimatePowerCardConfig;
 
   public setConfig(config: UltimatePowerCardConfig): void {
-    if (!config.grid_entity || !config.house_entity) {
-      throw new Error('grid_entity a house_entity jsou povinné.');
+    if (!config.grid_entity) {
+      throw new Error('grid_entity je povinná.');
     }
     this._config = { ...config };
   }
@@ -122,10 +122,7 @@ export class UltimatePowerCard extends LitElement {
         </div>
         <div></div>
         <div class="house-cluster">
-          <div
-            class="bubble house size-l"
-            @click=${() => this._moreInfo(cfg.house_entity)}
-          >
+          <div class="bubble house size-l">
             <ha-icon icon=${cfg.house_icon ?? DEFAULTS.house_icon}></ha-icon>
             <div class="val">${formatPower(s.house_w, showW, thr)}</div>
           </div>
