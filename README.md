@@ -13,17 +13,17 @@ Existing cards (`tesla-style-solar-power-card`, `power-flow-card-plus`, `power-f
 - 🟦 **One main house bubble** + **N appliance branches** (boiler, EV, heat-pump, kitchen circuits, server rack, …)
 - ⬜ Grid (import / export)
 
-## Features (planned for v0.1.0)
+## Features (v0.2)
 
-- [ ] Render N PV bubbles in a top row (orange)
-- [ ] Render N battery bubbles in a bottom row (green) with radial SoC progress
-- [ ] Render house bubble with radial fan of N appliances (blue)
-- [ ] Grid bubble (white) with import/export direction
-- [ ] Auto-derived flow lines between hubs (no need to wire each of the 7 flows manually)
-- [ ] Animated flow particles (SVG `animateMotion`)
-- [ ] Configurable thresholds, colours, icons
-- [ ] Click-through to HA `more-info` dialog
-- [ ] Visual config editor
+- Four main nodes in a cross around a central hub: production, consumption, battery and grid. The card fits one dashboard column.
+- N PV strings in a row above production; N batteries (with a state-of-charge ring) and N appliances as chains below their node.
+- Green marks own energy (production, battery, export), orange marks consumption and grid import. Idle nodes turn grey.
+- Animated flow: dots run from the source to the consumer and speed up steeply with power. A node that supplies energy pulses outwards, a node that draws energy pulses inwards.
+- House load is computed from PV, grid and battery; the remainder not covered by appliances is shown as "Other".
+- Optional statistics: production, consumption, grid import/export, self-sufficiency and self-consumption per day, week, month or year, with paging into the past (arrows or swipe on the chart).
+- Click-through to the HA `more-info` dialog. Czech and English labels, light and dark theme.
+
+Not yet: visual config editor, custom colours and icons.
 
 ## Installation
 
@@ -66,7 +66,27 @@ appliances:
 
 There is no house sensor to configure. The card derives the house load from the energy balance: `PV + grid + battery`, where grid is positive on import and battery is positive on discharge. On the consumption side you only list the individual appliances.
 
-Full options reference will live in [`docs/configuration.md`](docs/configuration.md) once the v0.1 schema is locked.
+### Options
+
+| Option | Default | Meaning |
+|---|---|---|
+| `grid_entity` | required | Grid power. Positive = import, negative = export. |
+| `grid_export_entity` | – | Only when import and export are two separate, always-positive sensors. |
+| `grid_invert` | `false` | Set when the grid sensor reports export as positive. |
+| `pv_strings[]` | – | `power_entity`, optional `name`. |
+| `pv_total_entity` | sum of strings | Total PV power, if you have a dedicated sensor. |
+| `batteries[]` | – | `power_entity` (positive = discharging), `soc_entity`, optional `name`, `invert`. |
+| `battery_total_entity`, `battery_invert` | sum of batteries | Total battery power and its sign switch. |
+| `appliances[]` | – | `power_entity`, `name`, optional `on_threshold_w`. |
+| `show_other` | `true` | Show the computed remainder of the house load. |
+| `animation` | `auto` | `auto` follows the system "reduce motion" setting, `always` ignores it, `off` never animates. |
+| `animation_speed` | `1` | Multiplier for the flow speed. |
+| `max_power` | `10000` | Power (W) at which the flow reaches full speed. |
+| `show_w_not_kw` | `false` | Always show watts. |
+| `show_statistics` | `true` | Show the balance section. |
+| `statistics` | Energy dashboard | Override the energy sensors: `pv`, `grid_import`, `grid_export`, `battery_charge`, `battery_discharge` (one id or a list each). |
+
+Statistics read Home Assistant long-term statistics, so the energy sensors must be in kWh with `state_class: total_increasing`. Without the `statistics` option the card uses the sensors configured in the Energy dashboard.
 
 ## Development
 

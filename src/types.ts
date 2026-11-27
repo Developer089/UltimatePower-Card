@@ -2,29 +2,30 @@ import type { HomeAssistant, LovelaceCardConfig } from 'custom-card-helpers';
 
 export interface PVStringConfig {
   power_entity: string;
-  daily_energy_entity?: string;
   name?: string;
-  icon?: string;
-  color?: string;
 }
 
 export interface BatteryConfig {
   power_entity: string;
   soc_entity: string;
-  charge_entity?: string;
-  discharge_entity?: string;
-  capacity_kwh?: number;
   name?: string;
-  icon?: string;
-  color?: string;
+  /** Set when the sensor reports charging as a positive value. */
+  invert?: boolean;
 }
 
 export interface ApplianceConfig {
   power_entity: string;
   name: string;
-  icon?: string;
   on_threshold_w?: number;
-  color?: string;
+}
+
+/** Energy (kWh) statistics used by the balance section. Each may be one id or a list. */
+export interface StatisticsConfig {
+  pv?: string | string[];
+  grid_import?: string | string[];
+  grid_export?: string | string[];
+  battery_charge?: string | string[];
+  battery_discharge?: string | string[];
 }
 
 export interface UltimatePowerCardConfig extends LovelaceCardConfig {
@@ -32,11 +33,16 @@ export interface UltimatePowerCardConfig extends LovelaceCardConfig {
   name?: string;
 
   // Hubs
+  /** Grid power. Positive = import, negative = export. */
   grid_entity: string;
+  /** Only when import and export are two separate, always-positive sensors. */
   grid_export_entity?: string;
+  /** Set when the grid sensor reports export as a positive value. */
+  grid_invert?: boolean;
   pv_total_entity?: string;
   battery_total_entity?: string;
-  battery_total_soc_entity?: string;
+  /** Set when battery_total_entity reports charging as a positive value. */
+  battery_invert?: boolean;
 
   // Multi-arrays
   pv_strings?: PVStringConfig[];
@@ -45,26 +51,23 @@ export interface UltimatePowerCardConfig extends LovelaceCardConfig {
 
   // Visual options
   show_w_not_kw?: boolean;
-  threshold_in_k?: number;
+  /**
+   * auto (default) follows the system "reduce motion" setting, always animates
+   * regardless of it, off never animates.
+   */
+  animation?: 'auto' | 'always' | 'off';
+  /** Multiplier for the flow animation speed. Default 1. */
   animation_speed?: number;
-  hide_inactive_lines?: boolean;
-  appliance_layout?: 'fan' | 'grid' | 'list';
+  /** Power (W) at which the flow animation reaches full speed. Default 10000. */
+  max_power?: number;
+  /** Show the computed remainder of the house load as an extra appliance. Default true. */
+  show_other?: boolean;
 
-  // Icons
-  grid_icon?: string;
-  house_icon?: string;
-  pv_icon?: string;
-  battery_icon?: string;
-}
-
-export interface ResolvedFlow {
-  pv_to_house: number;
-  pv_to_battery: number;
-  pv_to_grid: number;
-  grid_to_house: number;
-  grid_to_battery: number;
-  battery_to_house: number;
-  battery_to_grid: number;
+  // Statistics
+  /** Show the balance section with paging. Default true. */
+  show_statistics?: boolean;
+  /** Overrides the sensors taken from the Home Assistant Energy dashboard. */
+  statistics?: StatisticsConfig;
 }
 
 export interface ResolvedState {
@@ -72,8 +75,6 @@ export interface ResolvedState {
   grid_w: number;          // positive = import, negative = export
   house_w: number;
   battery_total_w: number; // positive = discharging, negative = charging
-  battery_avg_soc: number;
-  flows: ResolvedFlow;
 }
 
 export type HassLike = HomeAssistant;
