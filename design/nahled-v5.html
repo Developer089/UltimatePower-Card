@@ -1,0 +1,637 @@
+<title>UltimatePower Card náhled</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+  /* Layout: jedna karta jako v Home Assistantu. Nahoře kříž toků kolem středového uzlu, pod ním bilance za období a graf. */
+  :root {
+    color-scheme: dark;
+    --bg: #0b0b0c;
+    --card: #111112;
+    --inset: #1c1c1e;
+    --line: #2a2a2e;
+    --text: #f4f4f5;
+    --muted: #a3a3ab;
+    --wire: #7b7b84;
+    --pos: #8fe36a;        /* vlastní energie: výroba, baterie, dodávka */
+    --neg: #ff7d33;        /* spotřeba a odběr ze sítě */
+    --chart-pos: #5fb347;
+    --chart-neg: #d9541a;
+    --font-display: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+    --font-body: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      color-scheme: light;
+      --bg: #eef0ee; --card: #ffffff; --inset: #f3f4f3; --line: #dadcd9;
+      --text: #161716; --muted: #5c605c; --wire: #9a9e9a;
+      --pos: #2c9631; --neg: #e0661a; --chart-pos: #1f7a2c; --chart-neg: #f08a2a;
+    }
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #eef0ee; --card: #ffffff; --inset: #f3f4f3; --line: #dadcd9;
+    --text: #161716; --muted: #5c605c; --wire: #9a9e9a;
+    --pos: #2c9631; --neg: #e0661a; --chart-pos: #1f7a2c; --chart-neg: #f08a2a;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.5;
+    padding-block: 24px 40px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .wrap { max-width: 500px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+  .page-head h1 { font-family: var(--font-display); font-weight: 600; font-size: 22px; margin: 0; text-wrap: balance; }
+  .page-head p { margin: 4px 0 0; color: var(--muted); }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .section { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .section + .section { border-top: 1px solid var(--line); }
+  .section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+  .section-head h2 { font-family: var(--font-display); font-weight: 600; font-size: 16px; margin: 0; }
+  .section-head .hint { color: var(--muted); font-size: 12px; font-family: var(--font-body); font-weight: 400; margin-left: 6px; }
+
+  .seg { display: inline-flex; background: var(--inset); border: 1px solid var(--line); border-radius: 9px; padding: 2px; gap: 2px; }
+  .seg button {
+    font: inherit; font-size: 13px; color: var(--muted); background: transparent; border: 0;
+    padding: 5px 12px; border-radius: 7px; cursor: pointer;
+  }
+  .seg button:hover { color: var(--text); }
+  .seg button[aria-pressed="true"] { background: var(--card); color: var(--text); box-shadow: 0 0 0 1px var(--line); font-weight: 500; }
+  .seg button:focus-visible { outline: 2px solid var(--pos); outline-offset: 1px; }
+
+  /* ---- diagram toků ---- */
+  .diagram { overflow-x: auto; }
+  .diagram svg { display: block; width: 100%; height: auto; font-family: var(--font-body); }
+  .wire { fill: none; stroke: var(--wire); stroke-width: 1.5; opacity: .35; stroke-linecap: round; }
+  .wire.on { opacity: 1; }
+  .hub { fill: var(--wire); }
+  .dot.pos { fill: var(--pos); } .dot.neg { fill: var(--neg); }
+  .n.pos { color: var(--pos); } .n.neg { color: var(--neg); } .n.idle { color: var(--wire); }
+  .n .body { fill: var(--inset); stroke: currentColor; }
+  .n .echo { fill: none; stroke: var(--wire); stroke-width: 2; opacity: .55; }
+  .n .ic { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+  .n .ring-track { fill: var(--inset); stroke: var(--line); stroke-width: 3; }
+  .n .ring { fill: none; stroke: var(--pos); stroke-width: 3; stroke-linecap: round; }
+  .t-v { fill: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .t-n { fill: var(--muted); }
+  .stream { fill: none; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 0.1 15.9; opacity: .8; }
+  .stream.main { stroke-width: 4; }
+  .stream.pos { stroke: var(--pos); } .stream.neg { stroke: var(--neg); }
+  .dot { filter: drop-shadow(0 0 4px currentColor); }
+  .dot.pos { color: var(--pos); } .dot.neg { color: var(--neg); }
+  .pulse { fill: none; stroke-width: 2; }
+  .pulse.pos { stroke: var(--pos); } .pulse.neg { stroke: var(--neg); }
+
+  .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px 20px; background: var(--inset); border-radius: 10px; padding: 12px 14px; align-items: end; }
+  .ctl { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .ctl span { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); }
+  .ctl output { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .ctl input[type="range"] { width: 100%; margin: 0; accent-color: var(--pos); }
+  .ctl-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn { font: inherit; font-size: 13px; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .btn:hover { border-color: var(--wire); }
+  .btn[aria-pressed="true"] { border-color: var(--pos); box-shadow: 0 0 0 1px var(--pos); }
+  .btn:focus-visible { outline: 2px solid var(--pos); outline-offset: 1px; }
+  .rm-note { margin: 0; font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .legend i.round { border-radius: 50%; }
+
+  /* ---- bilance ---- */
+  .kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  @media (max-width: 760px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 440px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .kpi { background: var(--inset); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+  .kpi .k { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  .kpi .k i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .kpi .val { font-family: var(--font-display); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .kpi .val small { font-family: var(--font-body); font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 3px; }
+
+  .pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .pager button { font: inherit; font-size: 20px; line-height: 1; width: 36px; height: 32px; color: var(--text); background: var(--inset); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+  .pager button:hover:not(:disabled) { border-color: var(--wire); }
+  .pager button:disabled { opacity: .35; cursor: default; }
+  .pager button:focus-visible { outline: 2px solid var(--pos); outline-offset: 1px; }
+  .pager .pg-title { font-family: var(--font-display); font-weight: 600; font-size: 15px; text-align: center; min-width: 0; }
+  .chart { position: relative; touch-action: pan-y; }
+  .chart svg { display: block; width: 100%; font-family: var(--font-body); }
+  .chart .gl { stroke: var(--line); stroke-width: 1; }
+  .chart .ax { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .chart .bar-pos { fill: var(--chart-pos); } .chart .bar-neg { fill: var(--chart-neg); }
+  .chart .hit { fill: transparent; }
+  .chart .hit.active { fill: var(--text); opacity: .06; }
+  .tip {
+    position: absolute; top: 4px; pointer-events: none; background: var(--card); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 6px 18px rgba(0,0,0,.25);
+    white-space: nowrap; font-variant-numeric: tabular-nums;
+  }
+  .tip b { display: block; margin-bottom: 4px; }
+  .tip div { display: flex; align-items: center; gap: 6px; }
+  .tip i { width: 8px; height: 8px; border-radius: 2px; }
+  .tip span { margin-left: auto; padding-left: 14px; font-weight: 600; }
+
+  details { font-size: 13px; }
+  details summary { cursor: pointer; color: var(--muted); }
+  .tablewrap { overflow-x: auto; margin-top: 8px; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 4px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 500; }
+
+  .notes { color: var(--muted); font-size: 13px; max-width: 68ch; }
+  .notes h2 { font-family: var(--font-display); font-size: 15px; color: var(--text); margin: 0 0 6px; }
+  .notes ul { margin: 0; padding-left: 18px; }
+  .notes li + li { margin-top: 3px; }
+</style>
+
+<div class="wrap">
+  <header class="page-head">
+    <h1>UltimatePower Card</h1>
+    <p>Návrh podoby karty pro v0.2 v šířce jednoho sloupce Home Assistantu. Všechna čísla jsou ukázková, ne z tvého domu.</p>
+  </header>
+
+  <div class="card">
+    <div class="section">
+      <div class="section-head">
+        <h2>Energie domu<span class="hint">právě teď</span></h2>
+        <div class="seg" id="scen" role="group" aria-label="Ukázková situace">
+          <button type="button" id="scen-noon" data-s="noon" aria-pressed="true">Poledne</button>
+          <button type="button" id="scen-full" data-s="full" aria-pressed="false">Plná baterie</button>
+          <button type="button" id="scen-evening" data-s="evening" aria-pressed="false">Večer</button>
+          <button type="button" id="scen-night" data-s="night" aria-pressed="false">Noc, levný tarif</button>
+        </div>
+      </div>
+      <div class="diagram">
+        <svg id="flow" viewBox="0 0 480 596" role="img" aria-label="Schéma toků energie mezi výrobou, sítí, bateriemi a spotřebou"></svg>
+      </div>
+      <div style="font-size:12px;color:var(--muted)">Ovládání ukázky, není součást karty</div>
+      <div class="controls">
+        <label class="ctl" for="in-pv"><span>Výroba FVE <output id="out-pv" for="in-pv"></output></span><input type="range" id="in-pv" min="0" max="10000" step="100" value="9800"></label>
+        <label class="ctl" for="in-house"><span>Spotřeba domu <output id="out-house" for="in-house"></output></span><input type="range" id="in-house" min="200" max="10000" step="100" value="5200"></label>
+        <label class="ctl" for="in-soc"><span>Nabití baterií <output id="out-soc" for="in-soc"></output></span><input type="range" id="in-soc" min="0" max="100" step="1" value="78"></label>
+        <div class="ctl-btns">
+          <button type="button" class="btn" id="in-gc" aria-pressed="false">Nabíjet ze sítě</button>
+          <button type="button" class="btn" id="play" aria-pressed="false">Přehrát ukázku</button>
+          <button type="button" class="btn" id="tg-stats" aria-pressed="true">Statistiky</button>
+        </div>
+      </div>
+      <p class="rm-note" id="rm-note" hidden>Animace jsou vypnuté podle nastavení systému. <button type="button" class="btn" id="rm-on">Přesto přehrát</button></p>
+      <div class="legend">
+        <span><i class="round" style="background:var(--pos)"></i>Vlastní energie: výroba, baterie, dodávka do sítě</span>
+        <span><i class="round" style="background:var(--neg)"></i>Spotřeba a odběr ze sítě</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <h2>Bilance<span class="hint" id="period-hint"></span></h2>
+        <div class="seg" id="period" role="group" aria-label="Období">
+          <button type="button" id="per-day" data-p="day" aria-pressed="true">Den</button>
+          <button type="button" id="per-week" data-p="week" aria-pressed="false">Týden</button>
+          <button type="button" id="per-month" data-p="month" aria-pressed="false">Měsíc</button>
+          <button type="button" id="per-year" data-p="year" aria-pressed="false">Rok</button>
+        </div>
+      </div>
+      <div class="pager">
+        <button type="button" id="pg-prev" aria-label="Předchozí období">‹</button>
+        <div class="pg-title" id="pg-title" aria-live="polite"></div>
+        <button type="button" id="pg-next" aria-label="Další období">›</button>
+      </div>
+      <div class="kpis" id="kpis"></div>
+      <div class="legend">
+        <span><i style="background:var(--chart-pos)"></i>Výroba FVE</span>
+        <span><i style="background:var(--chart-neg)"></i>Spotřeba domu</span>
+        <span>kWh</span>
+      </div>
+      <div class="chart" id="chart">
+        <svg id="chart-svg" height="230" role="img" aria-label="Výroba a spotřeba za zvolené období"></svg>
+        <div class="tip" id="tip" hidden></div>
+      </div>
+      <details id="table-details">
+        <summary>Zobrazit jako tabulku</summary>
+        <div class="tablewrap" id="table"></div>
+      </details>
+    </div>
+  </div>
+
+  <section class="notes">
+    <h2>Jak je náhled postavený</h2>
+    <ul>
+      <li>Čtyři hlavní uzly do kříže kolem středu: výroba, spotřeba, baterie a síť. Čáry jsou rovné a šedé, barvu nesou jen uzly a puntíky.</li>
+      <li>Zelená je vlastní energie, oranžová je spotřeba a odběr ze sítě. Uzel bez výkonu zešedne.</li>
+      <li>Proud teček teče vždy od zdroje ke spotřebiči a zrychluje s výkonem. Uzel, který dodává, vysílá kruh ven, uzel, který odebírá, ho stahuje dovnitř.</li>
+      <li>Stringy jsou v řadě nad výrobou, spotřebiče a baterie visí ve sloupci pod svým uzlem, aby se karta vešla do jednoho sloupce. „Ostatní“ je dopočtený zbytek spotřeby.</li>
+      <li>Bilance za den, týden, měsíc a rok se soběstačností a vlastní spotřebou. Šipkami nebo tažením po grafu se listuje do minulosti.</li>
+      <li>Statistiky jsou volitelné. V ukázce je vypíná tlačítko „Statistiky“, v kartě to bude volba v nastavení.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ================= živé toky ================= */
+  var PRESETS = {
+    noon:    { pv: 9800, house: 5200, soc: 78,  gc: false },
+    full:    { pv: 8000, house: 2000, soc: 100, gc: false },
+    evening: { pv: 200,  house: 3100, soc: 52,  gc: false },
+    night:   { pv: 0,    house: 2900, soc: 22,  gc: true }
+  };
+  var ORDER = ['noon', 'full', 'evening', 'night'];
+  var BAT_MAX = 3000;   /* W, společný limit nabíjení i vybíjení */
+  var PV_NAMES = ['Východ', 'Jih', 'Západ'];
+  var BAT_NAMES = ['BMS-1', 'BMS-2', 'BMS-3'];
+  var APP_NAMES = ['Wallbox', 'Čerpadlo', 'Bojler', 'Kuchyň', 'Ostatní'];
+  var HUB = [240, 270], PROD = [240, 150], GRID = [240, 390], HOUSE = [100, 270], BAT = [380, 270];
+  var PV_POS = [[130, 50], [240, 50], [350, 50]];
+  var APP_POS = [[100, 360], [100, 410], [100, 460], [100, 510], [100, 560]];
+  var BAT_POS = [[380, 362], [380, 418], [380, 474]];
+  var IC = {
+    pv: 'M5 13h14l2 7H3z M9 13l-1 7 M15 13l1 7 M4 16.5h16 M8.5 10a3.5 3.5 0 0 1 7 0 M12 3v1.5 M6.5 5.5l1 1 M17.5 5.5l-1 1',
+    house: 'M4 11l8-7 8 7v9H4z M10 20v-5h4v5',
+    bat: 'M3 8h16v8H3z M21 10.5v3 M6.5 10.5v3 M9.5 10.5v3 M12.5 10.5v3',
+    grid: 'M12 3L8 21 M12 3l4 18 M7 9h10 M5.5 9l1.5-3h10l1.5 3 M9.3 15h5.4 M10 12l4 3 M14 12l-4 3'
+  };
+
+  function sum(a) { return a.reduce(function (s, v) { return s + v; }, 0); }
+  function fmtW(w) {
+    var a = Math.abs(w);
+    if (a < 1000) return Math.round(a) + ' W';
+    return (a / 1000).toFixed(1).replace('.', ',') + ' kW';
+  }
+  var L, D, B, seq;
+  /* čára z a do b; puntíky jedou ve směru a → b */
+  function wire(a, b, w, cls) {
+    var id = 'w' + (seq++), on = w > 5;
+    L += '<path id="' + id + '" class="wire' + (on ? ' on' : '') + '" d="M' + a[0] + ' ' + a[1] + ' L' + b[0] + ' ' + b[1] + '"/>';
+    if (reduce || !on) return;
+    var main = a === HUB || b === HUB;
+    var speed = 10 + 200 * Math.pow(Math.min(w, 12000) / 10000, 0.8);   /* px za sekundu: 100 W ≈ 15, 1 kW ≈ 42, 10 kW ≈ 210 */
+    L += '<path class="stream ' + cls + (main ? ' main' : '') + '" d="M' + a[0] + ' ' + a[1] + ' L' + b[0] + ' ' + b[1] + '">' +
+      '<animate attributeName="stroke-dashoffset" from="16" to="0" dur="' + (16 / speed).toFixed(3) + 's" repeatCount="indefinite"/></path>';
+    var n = !main ? 0 : w > 3000 ? 2 : 1;
+    var dur = Math.hypot(b[0] - a[0], b[1] - a[1]) / speed;
+    for (var i = 0; i < n; i++) {
+      D += '<circle class="dot ' + cls + '" r="4"><animateMotion dur="' + dur.toFixed(2) + 's" begin="-' +
+        (i * dur / n).toFixed(2) + 's" repeatCount="indefinite"><mpath href="#' + id + '"/></animateMotion></circle>';
+    }
+  }
+  function icon(name, p, size) {
+    var k = size / 24;
+    return '<path class="ic" transform="translate(' + (p[0] - size / 2) + ' ' + (p[1] - size / 2) + ') scale(' + k + ')" d="' + IC[name] + '"/>';
+  }
+  function txt(x, y, cls, size, s, anchor) {
+    return '<text x="' + x + '" y="' + y + '" class="' + cls + '" font-size="' + size + '" text-anchor="' + (anchor || 'middle') + '">' + s + '</text>';
+  }
+  function mainNode(p, state, ic) {
+    return '<g class="n ' + state + '"><circle class="echo" cx="' + (p[0] + 8) + '" cy="' + p[1] + '" r="36"/>' +
+      '<circle class="body" cx="' + p[0] + '" cy="' + p[1] + '" r="36" stroke-width="3"/>' + icon(ic, p, 32) + '</g>';
+  }
+  function smallNode(p, state, label) {
+    return '<g class="n ' + state + '"><circle class="body" cx="' + p[0] + '" cy="' + p[1] + '" r="22" stroke-width="2"/>' +
+      txt(p[0], p[1] + 4, 't-v', 10.5, label) + '</g>';
+  }
+
+  function pulse(p, cls, out) {
+    if (reduce) return '';
+    return '<circle class="pulse ' + cls + '" cx="' + p[0] + '" cy="' + p[1] + '" r="37">' +
+      '<animate attributeName="r" values="' + (out ? '37;49' : '49;37') + '" dur="1.8s" repeatCount="indefinite"/>' +
+      '<animate attributeName="opacity" values="' + (out ? '.65;0' : '0;.65') + '" dur="1.8s" repeatCount="indefinite"/></circle>';
+  }
+  /* kruh ven = uzel dodává, kruh dovnitř = uzel odebírá */
+  function pulses(pv, house, grid, bat) {
+    return (pv > 5 ? pulse(PROD, 'pos', true) : '') +
+      (house > 5 ? pulse(HOUSE, 'neg', false) : '') +
+      (grid > 5 ? pulse(GRID, 'neg', true) : grid < -5 ? pulse(GRID, 'pos', false) : '') +
+      (bat > 5 ? pulse(BAT, 'pos', true) : bat < -5 ? pulse(BAT, 'pos', false) : '');
+  }
+
+  function renderFlow(s) {
+    var pv = sum(s.pv), bat = sum(s.bat);
+    var grid = s.house - pv - bat;                 /* + odběr, − dodávka */
+    var apps = s.app.concat([Math.max(0, s.house - sum(s.app))]);
+    L = ''; D = ''; B = ''; seq = 0;
+
+    /* hlavní kříž */
+    wire(PROD, HUB, pv, 'pos');
+    wire(HUB, HOUSE, s.house, 'neg');
+    if (grid >= 0) wire(GRID, HUB, grid, 'neg'); else wire(HUB, GRID, -grid, 'pos');
+    if (bat >= 0) wire(BAT, HUB, bat, 'pos'); else wire(HUB, BAT, -bat, 'pos');
+    /* podružné uzly */
+    s.pv.forEach(function (w, i) { wire(PV_POS[i], PROD, w, 'pos'); });
+    /* spotřebiče a baterie visí pod svým uzlem v řetězu; úsek nese součet všeho pod sebou */
+    apps.forEach(function (w, i) { wire(i ? APP_POS[i - 1] : HOUSE, APP_POS[i], sum(apps.slice(i)), 'neg'); });
+    s.bat.forEach(function (w, i) {
+      var rest = sum(s.bat.slice(i)), up = i ? BAT_POS[i - 1] : BAT;
+      if (rest >= 0) wire(BAT_POS[i], up, rest, 'pos'); else wire(up, BAT_POS[i], -rest, 'pos');
+    });
+
+    var st = function (w, cls) { return Math.abs(w) > 5 ? cls : 'idle'; };
+
+    /* výroba */
+    B += mainNode(PROD, st(pv, 'pos'), 'pv') + txt(292, 147, 't-v', 15, fmtW(pv), 'start') + txt(292, 165, 't-n', 13, 'Výroba', 'start');
+    s.pv.forEach(function (w, i) {
+      B += smallNode(PV_POS[i], st(w, 'pos'), fmtW(w)) + txt(PV_POS[i][0], 18, 't-n', 11, PV_NAMES[i]);
+    });
+    /* spotřeba */
+    B += mainNode(HOUSE, 'neg', 'house') + txt(100, 204, 't-v', 15, fmtW(s.house)) + txt(100, 222, 't-n', 13, 'Spotřeba');
+    apps.forEach(function (w, i) {
+      B += smallNode(APP_POS[i], st(w, 'neg'), fmtW(w)) + txt(APP_POS[i][0] + 30, APP_POS[i][1] + 4, 't-n', 11, APP_NAMES[i], 'start');
+    });
+    /* baterie */
+    var batWord = bat > 5 ? 'vybíjí' : bat < -5 ? 'nabíjí' : 'v klidu';
+    B += mainNode(BAT, st(bat, 'pos'), 'bat') + txt(380, 204, 't-v', 15, fmtW(bat)) + txt(380, 222, 't-n', 13, 'Baterie · ' + batWord);
+    var C = 2 * Math.PI * 24;
+    s.bat.forEach(function (w, i) {
+      var p = BAT_POS[i], soc = s.soc[i], sign = w > 5 ? '−' : w < -5 ? '+' : '';
+      B += '<g class="n pos"><circle class="ring-track" cx="' + p[0] + '" cy="' + p[1] + '" r="24"/>' +
+        '<circle class="ring" cx="' + p[0] + '" cy="' + p[1] + '" r="24" stroke-dasharray="' + C.toFixed(1) + '" stroke-dashoffset="' +
+        (C * (1 - soc / 100)).toFixed(1) + '" transform="rotate(-90 ' + p[0] + ' ' + p[1] + ')"/>' +
+        txt(p[0], p[1] + 4, 't-v', 11, soc + ' %') + '</g>' +
+        txt(p[0] - 34, p[1] - 2, 't-n', 11, BAT_NAMES[i], 'end') + txt(p[0] - 34, p[1] + 13, 't-v', 11, sign + fmtW(w), 'end');
+    });
+    /* síť */
+    var gridWord = grid > 5 ? 'odběr' : grid < -5 ? 'dodávka' : 'v klidu';
+    B += mainNode(GRID, grid > 5 ? 'neg' : grid < -5 ? 'pos' : 'idle', 'grid') +
+      txt(240, 450, 't-n', 13, 'Síť · ' + gridWord) + txt(240, 470, 't-v', 15, fmtW(grid));
+
+    document.getElementById('flow').innerHTML = L + pulses(pv, s.house, grid, bat) + D + '<circle class="hub" cx="' + HUB[0] + '" cy="' + HUB[1] + '" r="7"/>' + B;
+  }
+
+  /* ---- ovládání ukázky ---- */
+  var $ = function (id) { return document.getElementById(id); };
+  var elPv = $('in-pv'), elHouse = $('in-house'), elSoc = $('in-soc'), elGc = $('in-gc'), elPlay = $('play');
+  var timer = null, step = 0;
+
+  function model() {
+    var pv = +elPv.value, house = +elHouse.value, soc = +elSoc.value;
+    var gc = elGc.getAttribute('aria-pressed') === 'true';
+    var surplus = pv - house, bat;                 /* bat: + vybíjí, − nabíjí */
+    if (gc && soc < 100) bat = -BAT_MAX;
+    else if (surplus > 0) bat = soc < 100 ? -Math.min(surplus, BAT_MAX) : 0;
+    else bat = soc > 5 ? Math.min(-surplus, BAT_MAX) : 0;
+    var edge = soc >= 100 || soc <= 0;
+    return {
+      pv: [0.21, 0.44, 0.35].map(function (k) { return Math.round(pv * k); }),
+      house: house,
+      bat: [0.36, 0.34, 0.30].map(function (k) { return Math.round(bat * k); }),
+      soc: [2, -3, 1].map(function (d) { return Math.max(0, Math.min(100, soc + (edge ? 0 : d))); }),
+      app: [0.40, 0.20, 0.12, 0.13].map(function (k) { return Math.round(house * k); })
+    };
+  }
+  function update() {
+    $('out-pv').textContent = fmtW(+elPv.value);
+    $('out-house').textContent = fmtW(+elHouse.value);
+    $('out-soc').textContent = elSoc.value + ' %';
+    renderFlow(model());
+  }
+  function markPreset(key) {
+    $('scen').querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x.dataset.s === key)); });
+  }
+  function applyPreset(key) {
+    var p = PRESETS[key];
+    elPv.value = p.pv; elHouse.value = p.house; elSoc.value = p.soc;
+    elGc.setAttribute('aria-pressed', String(p.gc));
+    markPreset(key); update();
+  }
+  function stopPlay() {
+    if (timer) { clearInterval(timer); timer = null; }
+    elPlay.setAttribute('aria-pressed', 'false'); elPlay.textContent = 'Přehrát ukázku';
+  }
+  $('scen').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    stopPlay(); applyPreset(b.dataset.s);
+  });
+  [elPv, elHouse, elSoc].forEach(function (el) {
+    el.addEventListener('input', function () { stopPlay(); markPreset(null); update(); });
+  });
+  elGc.addEventListener('click', function () {
+    stopPlay(); markPreset(null);
+    elGc.setAttribute('aria-pressed', String(elGc.getAttribute('aria-pressed') !== 'true'));
+    update();
+  });
+  elPlay.addEventListener('click', function () {
+    if (timer) { stopPlay(); return; }
+    elPlay.setAttribute('aria-pressed', 'true'); elPlay.textContent = 'Zastavit ukázku';
+    step = 0; applyPreset(ORDER[0]);
+    timer = setInterval(function () { step = (step + 1) % ORDER.length; applyPreset(ORDER[step]); }, 4500);
+  });
+  if (reduce) {
+    $('rm-note').hidden = false;
+    $('rm-on').addEventListener('click', function () { reduce = false; $('rm-note').hidden = true; update(); });
+  }
+
+  /* ================= bilance a graf ================= */
+  function derive(pv, cons) {       /* delší období: přímá spotřeba včetně baterie */
+    var imp = [], exp = [];
+    pv.forEach(function (p, i) {
+      var direct = Math.min(p, cons[i]) * 0.92;
+      imp.push(cons[i] - direct); exp.push(p - direct);
+    });
+    return { imp: imp, exp: exp };
+  }
+  function simulateDay(pv, cons) {  /* den: baterie 15 kWh */
+    var cap = 15, e = 4, imp = [], exp = [];
+    pv.forEach(function (p, i) {
+      var d = p - cons[i], im = 0, ex = 0;
+      if (d >= 0) { var c = Math.min(d, cap - e); e += c; ex = d - c; }
+      else { var u = Math.min(-d, e); e -= u; im = -d - u; }
+      imp.push(im); exp.push(ex);
+    });
+    return { imp: imp, exp: exp };
+  }
+  var dayPv = [0,0,0,0,0,0,0.1,0.6,1.8,3.2,4.6,5.6,6.0,5.7,4.9,3.8,2.6,1.4,0.5,0.1,0,0,0,0];
+  var dayCons = [0.5,0.4,2.4,2.3,0.5,0.6,1.2,1.5,1.0,0.9,1.4,4.6,5.0,4.2,1.2,1.0,1.3,2.1,2.6,1.9,1.4,1.0,0.7,0.5];
+  var monPv = [], monCons = [], monLab = [];
+  for (var i = 0; i < 30; i++) {
+    monPv.push(Math.round((30 + 14 * Math.sin(i * 1.7) + 6 * Math.cos(i * 0.6)) * 10) / 10);
+    monCons.push(Math.round((33 + 5 * Math.sin(i * 0.9 + 1)) * 10) / 10);
+    monLab.push((i + 1) + '.');
+  }
+  var PERIODS = {
+    day:   { hint: 'ukázkový slunečný den, po hodinách', labels: dayPv.map(function (_, h) { return h + ':00'; }),
+             tick: function (i) { return i % 3 === 0; }, pv: dayPv, cons: dayCons, sim: simulateDay },
+    week:  { hint: 'ukázkový týden, po dnech', labels: ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'],
+             tick: function () { return true; }, pv: [38, 41, 22, 12, 35, 44, 40.9], cons: [31, 29, 34, 36, 30, 38, 39], sim: derive },
+    month: { hint: 'ukázkový měsíc, po dnech', labels: monLab,
+             tick: function (i) { return i === 0 || (i + 1) % 5 === 0; }, pv: monPv, cons: monCons, sim: derive },
+    year:  { hint: 'ukázkový rok, po měsících', labels: ['Led', 'Úno', 'Bře', 'Dub', 'Kvě', 'Čvn', 'Čvc', 'Srp', 'Zář', 'Říj', 'Lis', 'Pro'],
+             tick: function () { return true; }, pv: [180, 310, 620, 890, 1120, 1210, 1250, 1090, 780, 450, 210, 140],
+             cons: [1150, 980, 860, 690, 610, 580, 600, 620, 680, 820, 1010, 1180], sim: derive }
+  };
+  var current = 'day', offset = 0, curP = null;
+  var MONTHS = ['Leden', 'Únor', 'Březen', 'Duben', 'Květen', 'Červen', 'Červenec', 'Srpen', 'Září', 'Říjen', 'Listopad', 'Prosinec'];
+  var WDAYS = ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'];
+  function rnd(n) { var x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+  function r1(v) { return Math.round(v * 10) / 10; }
+  function dm(d) { return d.getDate() + '. ' + (d.getMonth() + 1) + '.'; }
+  /* období posunuté o `off` kroků do minulosti; starší období mají vlastní ukázková data */
+  function getPeriod(kind, off) {
+    var base = PERIODS[kind], now = new Date();
+    var d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var seed = { day: 1, week: 2, month: 3, year: 4 }[kind] * 1000 + off;
+    var sun = function (k) { return 0.3 + 0.75 * rnd(seed + k); };
+    var use = function (k) { return 0.85 + 0.3 * rnd(seed + k + 0.5); };
+    var P = { labels: base.labels, tick: base.tick, pv: base.pv, cons: base.cons, sim: base.sim, title: '' };
+    if (kind === 'day') {
+      d.setDate(d.getDate() - off);
+      P.title = off === 0 ? 'Dnes' : off === 1 ? 'Včera' : WDAYS[d.getDay()] + ' ' + dm(d);
+      if (off) { var f = sun(0), g = use(0); P.pv = base.pv.map(function (v) { return r1(v * f); }); P.cons = base.cons.map(function (v) { return r1(v * g); }); }
+    } else if (kind === 'week') {
+      d.setDate(d.getDate() - (d.getDay() + 6) % 7 - 7 * off);
+      var e = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 6);
+      P.title = off === 0 ? 'Tento týden' : off === 1 ? 'Minulý týden' : dm(d) + ' – ' + dm(e);
+      if (off) { P.pv = base.pv.map(function (_, i) { return r1(41 * sun(i * 0.1)); }); P.cons = base.cons.map(function (_, i) { return r1(34 * use(i * 0.1)); }); }
+    } else if (kind === 'month') {
+      var m = new Date(d.getFullYear(), d.getMonth() - off, 1);
+      var n = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
+      P.title = MONTHS[m.getMonth()] + ' ' + m.getFullYear();
+      P.labels = []; P.pv = []; P.cons = [];
+      for (var i = 0; i < n; i++) { P.labels.push((i + 1) + '.'); P.pv.push(r1(41 * sun(i * 0.01))); P.cons.push(r1(34 * use(i * 0.01))); }
+    } else {
+      P.title = String(d.getFullYear() - off);
+      if (off) { var fy = 0.9 + 0.2 * rnd(seed), gy = 0.93 + 0.14 * rnd(seed + 0.5); P.pv = base.pv.map(function (v) { return Math.round(v * fy); }); P.cons = base.cons.map(function (v) { return Math.round(v * gy); }); }
+    }
+    return P;
+  }
+  function page(dir) {              /* +1 = starší období, −1 = novější */
+    var next = Math.max(0, Math.min(60, offset + dir));
+    if (next === offset) return;
+    offset = next; hideTip(); renderBalance();
+  }
+
+  function num(v, d) { return v.toLocaleString('cs-CZ', { minimumFractionDigits: d, maximumFractionDigits: d }); }
+  function energy(v) { return v >= 1000 ? [num(v / 1000, 2), 'MWh'] : [num(v, 1), 'kWh']; }
+  function niceStep(max) {
+    var raw = max / 4, p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p;
+    return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
+  }
+  function bar(x, y, w, h) {
+    if (h <= 0) return '';
+    var r = Math.min(4, w / 2, h);
+    return 'M' + x + ',' + (y + h) + 'V' + (y + r) + 'Q' + x + ',' + y + ' ' + (x + r) + ',' + y + 'H' + (x + w - r) +
+      'Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + r) + 'V' + (y + h) + 'Z';
+  }
+
+  function renderBalance() {
+    var P = curP = getPeriod(current, offset), io = P.sim(P.pv, P.cons);
+    document.getElementById('pg-title').textContent = P.title;
+    document.getElementById('pg-next').disabled = offset === 0;
+    document.getElementById('pg-prev').disabled = offset === 60;
+    var pv = sum(P.pv), cons = sum(P.cons), imp = sum(io.imp), exp = sum(io.exp);
+    document.getElementById('period-hint').textContent = 'ukázková data';
+
+    var tiles = [
+      ['Výroba FVE', energy(pv), 'var(--pos)'],
+      ['Spotřeba domu', energy(cons), 'var(--neg)'],
+      ['Odběr ze sítě', energy(imp), 'var(--neg)'],
+      ['Dodávka do sítě', energy(exp), 'var(--pos)'],
+      ['Soběstačnost', [num((cons - imp) / cons * 100, 0), '%'], 'var(--pos)'],
+      ['Vlastní spotřeba', [num((pv - exp) / pv * 100, 0), '%'], 'var(--pos)']
+    ];
+    document.getElementById('kpis').innerHTML = tiles.map(function (t) {
+      return '<div class="kpi"><div class="k"><i style="background:' + t[2] + '"></i>' + t[0] + '</div>' +
+        '<div class="val">' + t[1][0] + '<small>' + t[1][1] + '</small></div></div>';
+    }).join('');
+
+    /* graf */
+    var svgEl = document.getElementById('chart-svg');
+    var W = Math.max(280, document.getElementById('chart').clientWidth), H = 230;
+    var m = { l: 40, r: 6, t: 10, b: 24 }, pw = W - m.l - m.r, ph = H - m.t - m.b;
+    var n = P.pv.length, band = pw / n;
+    var step = niceStep(Math.max.apply(null, P.pv.concat(P.cons)));
+    var top = Math.ceil(Math.max.apply(null, P.pv.concat(P.cons)) / step) * step;
+    var y = function (v) { return m.t + ph - v / top * ph; };
+    var bw = Math.max(2, Math.min(14, (band - 2) * 0.4)), gap = band > 12 ? 2 : 1;
+    var skip = band < 26 && n <= 12 ? 2 : 1;
+    var g = '';
+    for (var v = 0; v <= top + 1e-9; v += step) {
+      g += '<line class="gl" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y(v) + '" y2="' + y(v) + '"/>' +
+        '<text class="ax" x="' + (m.l - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + num(v, step < 1 ? 1 : 0) + '</text>';
+    }
+    var bars = '', hits = '';
+    for (var i = 0; i < n; i++) {
+      var cx = m.l + band * (i + 0.5);
+      bars += '<path class="bar-pos" d="' + bar(cx - gap / 2 - bw, y(P.pv[i]), bw, y(0) - y(P.pv[i])) + '"/>' +
+        '<path class="bar-neg" d="' + bar(cx + gap / 2, y(P.cons[i]), bw, y(0) - y(P.cons[i])) + '"/>';
+      if (P.tick(i) && i % skip === 0) {
+        g += '<text class="ax" x="' + cx + '" y="' + (H - 6) + '" text-anchor="middle">' + P.labels[i].replace(':00', '') + '</text>';
+      }
+      hits += '<rect class="hit" data-i="' + i + '" x="' + (m.l + band * i) + '" y="' + m.t + '" width="' + band + '" height="' + ph + '"/>';
+    }
+    svgEl.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svgEl.innerHTML = g + bars + hits;
+
+    /* tabulka */
+    var rows = P.labels.map(function (l, i) {
+      return '<tr><td>' + l + '</td><td>' + num(P.pv[i], 1) + '</td><td>' + num(P.cons[i], 1) + '</td><td>' +
+        num(io.imp[i], 1) + '</td><td>' + num(io.exp[i], 1) + '</td></tr>';
+    }).join('');
+    document.getElementById('table').innerHTML = '<table><thead><tr><th>Období</th><th>Výroba (kWh)</th><th>Spotřeba (kWh)</th>' +
+      '<th>Odběr (kWh)</th><th>Dodávka (kWh)</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  var tip = document.getElementById('tip'), chartEl = document.getElementById('chart');
+  function hideTip() {
+    tip.hidden = true;
+    var a = chartEl.querySelector('.hit.active'); if (a) a.classList.remove('active');
+  }
+  function showTip(e) {
+    var r = e.target.closest('.hit'); if (!r) { hideTip(); return; }
+    var a = chartEl.querySelector('.hit.active'); if (a && a !== r) a.classList.remove('active');
+    r.classList.add('active');
+    var P = curP, i = +r.dataset.i;
+    tip.innerHTML = '<b>' + P.labels[i] + '</b>' +
+      '<div><i style="background:var(--chart-pos)"></i>Výroba<span>' + num(P.pv[i], 1) + ' kWh</span></div>' +
+      '<div><i style="background:var(--chart-neg)"></i>Spotřeba<span>' + num(P.cons[i], 1) + ' kWh</span></div>';
+    tip.hidden = false;
+    var box = chartEl.getBoundingClientRect(), hb = r.getBoundingClientRect();
+    var x = hb.left - box.left + hb.width / 2 + 10;
+    if (x + tip.offsetWidth > box.width) x = hb.left - box.left + hb.width / 2 - 10 - tip.offsetWidth;
+    tip.style.left = Math.max(0, x) + 'px';
+  }
+  chartEl.addEventListener('pointermove', showTip);
+  chartEl.addEventListener('pointerdown', showTip);
+  chartEl.addEventListener('pointerleave', hideTip);
+
+  document.getElementById('period').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    this.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+    current = b.dataset.p; offset = 0; hideTip(); renderBalance();
+  });
+  document.getElementById('pg-prev').addEventListener('click', function () { page(1); });
+  document.getElementById('pg-next').addEventListener('click', function () { page(-1); });
+  /* listování tažením po grafu: doprava = starší, doleva = novější */
+  var swipeX = null;
+  chartEl.addEventListener('pointerdown', function (e) { swipeX = e.clientX; });
+  chartEl.addEventListener('pointerup', function (e) {
+    if (swipeX === null) return;
+    var dx = e.clientX - swipeX; swipeX = null;
+    if (Math.abs(dx) > 50) page(dx > 0 ? 1 : -1);
+  });
+  chartEl.addEventListener('pointercancel', function () { swipeX = null; });
+  /* statistiky jsou volitelné: v kartě to bude volba show_statistics */
+  var statsSection = document.getElementById('period').closest('.section');
+  document.getElementById('tg-stats').addEventListener('click', function () {
+    var on = this.getAttribute('aria-pressed') !== 'true';
+    this.setAttribute('aria-pressed', String(on));
+    statsSection.hidden = !on;
+    if (on) renderBalance();
+  });
+
+  var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(renderBalance, 120); });
+
+  applyPreset('noon');
+  renderBalance();
+})();
+</script>

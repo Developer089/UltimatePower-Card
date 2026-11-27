@@ -44,7 +44,10 @@ export const resolveState = (
   const grid_w = config.grid_export_entity
     ? grid_import - grid_export
     : grid_import; // signed: + import / - export
-  const house_w = num(hass, config.house_entity);
+  // The house load is never read from a sensor; it follows from the energy
+  // balance: everything produced, imported and discharged that is not exported
+  // or stored is consumed. Clamped at 0 because sensors update out of sync.
+  const house_w = Math.max(0, pv_total_w + grid_w + battery_total_w);
 
   const flows = computeFlows({
     pv: pv_total_w,
