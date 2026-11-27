@@ -12,7 +12,7 @@ import type {
   UltimatePowerCardConfig,
 } from './types';
 
-const VERSION = '0.1.0';
+const VERSION = '0.1.1';
 
 const DEFAULTS = {
   threshold_in_k: 1, // switch to kW above 1 000 W
