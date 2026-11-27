@@ -1,6 +1,6 @@
 {
   "name": "ultimate-power-card",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Home Assistant custom Lovelace card — Tesla-style power flow with multi-battery and multi-appliance support",
   "main": "dist/ultimate-power-card.js",
   "type": "module",
