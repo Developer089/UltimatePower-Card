@@ -11,9 +11,15 @@ export const readPower = (hass: HassLike, entity?: string): number => {
   return unit === 'kw' ? v * 1000 : v;
 };
 
+/** Discharge minus charge from two sensors that each report a positive value. */
+const readSplit = (hass: HassLike, charge?: string, discharge?: string): number =>
+  Math.abs(readPower(hass, discharge)) - Math.abs(readPower(hass, charge));
+
 /** Battery power in watts, positive = discharging. */
 export const readBattery = (hass: HassLike, b: BatteryConfig): number =>
-  readPower(hass, b.power_entity) * (b.invert ? -1 : 1);
+  b.charge_entity || b.discharge_entity
+    ? readSplit(hass, b.charge_entity, b.discharge_entity)
+    : readPower(hass, b.power_entity) * (b.invert ? -1 : 1);
 
 export const resolveState = (
   hass: HassLike,
@@ -26,7 +32,9 @@ export const resolveState = (
       : (config.pv_strings ?? []).reduce((sum, s) => sum + readPower(hass, s.power_entity), 0),
   );
 
-  const battery_total_w = config.battery_total_entity
+  const battery_total_w = config.battery_charge_entity || config.battery_discharge_entity
+    ? readSplit(hass, config.battery_charge_entity, config.battery_discharge_entity)
+    : config.battery_total_entity
     ? readPower(hass, config.battery_total_entity) * (config.battery_invert ? -1 : 1)
     : (config.batteries ?? []).reduce((sum, b) => sum + readBattery(hass, b), 0);
 
