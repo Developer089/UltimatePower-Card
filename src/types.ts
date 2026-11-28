@@ -20,10 +20,18 @@ export interface BatteryConfig {
   invert?: boolean;
 }
 
+/**
+ * An appliance, or a group of them (a flat, a floor, a sub-meter) when it has
+ * `children`. A group shows its own sensor if it has one, otherwise the sum of
+ * its children. Groups may be nested.
+ */
 export interface ApplianceConfig {
-  power_entity: string;
+  power_entity?: string;
   name: string;
   on_threshold_w?: number;
+  children?: ApplianceConfig[];
+  /** Start with the children hidden; a click on the group shows them. */
+  collapsed?: boolean;
 }
 
 /** Energy (kWh) statistics used by the balance section. Each may be one id or a list. */
@@ -68,8 +76,8 @@ export interface UltimatePowerCardConfig extends LovelaceCardConfig {
   // Visual options
   show_w_not_kw?: boolean;
   /**
-   * auto (default) follows the system "reduce motion" setting, always animates
-   * regardless of it, off never animates.
+   * auto (default): with the system "reduce motion" setting on, only the small
+   * flow dots move; always animates everything regardless of it; off never animates.
    */
   animation?: 'auto' | 'always' | 'off';
   /** Multiplier for the flow animation speed. Default 1. */

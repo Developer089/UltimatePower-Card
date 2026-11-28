@@ -19,13 +19,28 @@ import {
   type StatIds,
   type StatsResult,
 } from './statistics';
-import type { UltimatePowerCardConfig } from './types';
+import type { ApplianceConfig, UltimatePowerCardConfig } from './types';
 
-const VERSION = '0.2.2';
+const VERSION = '0.3.0';
 
 type Pt = [number, number];
 type Tone = 'pos' | 'neg';
 type NodeState = Tone | 'idle';
+
+/** One appliance or group with its power already read. */
+interface AppNode {
+  name: string;
+  w: number;
+  entity?: string;
+  threshold: number;
+  kids: AppNode[];
+  key: string;
+  open: boolean;
+}
+/** A visible line of the appliance tree. */
+interface AppRow extends AppNode {
+  depth: number;
+}
 
 /** Below this power (W) a node counts as idle and its flow is not animated. */
 const IDLE_W = 5;
@@ -72,6 +87,15 @@ const WORDS = {
 
 const sum = (a: number[]): number => a.reduce((s, v) => s + v, 0);
 
+const appEntities = (list?: ApplianceConfig[]): (string | undefined)[] =>
+  (list ?? []).flatMap((a) => [a.power_entity, ...appEntities(a.children)]);
+
+/** Shortens a label to the width it has; SVG text does not wrap or clip by itself. */
+const fit = (text: string, px: number, fontPx = 11): string => {
+  const max = Math.max(3, Math.floor(px / (fontPx * 0.56)));
+  return text.length > max ? text.slice(0, max - 1).trimEnd() + '…' : text;
+};
+
 @customElement('ultimate-power-card')
 export class UltimatePowerCard extends LitElement {
   static styles = cardStyles;
@@ -88,6 +112,8 @@ export class UltimatePowerCard extends LitElement {
   private _request = 0;
   private _timer?: number;
   private _swipeX: number | null = null;
+  /** Groups whose open/closed state the user flipped by clicking, by tree path. */
+  @state() private _toggled = new Set<string>();
   private _lastRender = 0;
   private _pending?: number;
 
@@ -196,7 +222,7 @@ export class UltimatePowerCard extends LitElement {
       c.battery_discharge_entity,
       ...(c.pv_strings ?? []).map((s) => s.power_entity),
       ...(c.batteries ?? []).flatMap((b) => [b.power_entity, b.charge_entity, b.discharge_entity, b.soc_entity]),
-      ...(c.appliances ?? []).map((a) => a.power_entity),
+      ...appEntities(c.appliances),
     ].filter((e): e is string => !!e);
   }
 
@@ -275,13 +301,45 @@ export class UltimatePowerCard extends LitElement {
     `;
   }
 
-  private _smallNode(p: Pt, st: NodeState, label: string, entity?: string): SVGTemplateResult {
+  private _smallNode(
+    p: Pt,
+    st: NodeState,
+    label: string,
+    entity?: string,
+    r = 22,
+    onClick?: () => void,
+  ): SVGTemplateResult {
+    const click = onClick ?? (entity ? () => this._moreInfo(entity) : undefined);
     return svg`
-      <g class="n ${st} ${entity ? 'click' : ''}" @click=${() => this._moreInfo(entity)}>
-        <circle class="body" cx=${p[0]} cy=${p[1]} r="22" stroke-width="2"></circle>
-        ${this._text(p[0], p[1] + 4, 't-v', 10.5, label)}
+      <g class="n ${st} ${click ? 'click' : ''}" @click=${click ?? nothing}>
+        <circle class="body" cx=${p[0]} cy=${p[1]} r=${r} stroke-width="2"></circle>
+        ${this._text(p[0], p[1] + (r < 20 ? 3 : 4), 't-v', r < 20 ? 8.5 : 10.5, label)}
       </g>
     `;
+  }
+
+  /** Reads the appliance tree; a group without its own sensor is the sum of its children. */
+  private _appTree(list: ApplianceConfig[] | undefined, prefix: string): AppNode[] {
+    return (list ?? []).map((a, i) => {
+      const key = `${prefix}${i}`;
+      const kids = this._appTree(a.children, `${key}.`);
+      const flipped = this._toggled.has(key);
+      return {
+        name: a.name,
+        w: a.power_entity ? Math.max(0, readPower(this.hass!, a.power_entity)) : sum(kids.map((k) => k.w)),
+        entity: a.power_entity,
+        threshold: a.on_threshold_w ?? IDLE_W,
+        kids,
+        key,
+        open: kids.length > 0 && (a.collapsed ? flipped : !flipped),
+      };
+    });
+  }
+
+  private _toggle(key: string): void {
+    const next = new Set(this._toggled);
+    if (!next.delete(key)) next.add(key);
+    this._toggled = next;
   }
 
   private _renderFlow(): TemplateResult {
@@ -298,20 +356,32 @@ export class UltimatePowerCard extends LitElement {
 
     const pvW = strings.map((x) => Math.max(0, readPower(hass, x.power_entity)));
     const batW = bats.map((b) => readBattery(hass, b));
-    const apps = (cfg.appliances ?? []).map((a) => ({
-      name: a.name,
-      w: Math.max(0, readPower(hass, a.power_entity)),
-      entity: a.power_entity as string | undefined,
-      threshold: a.on_threshold_w ?? IDLE_W,
-    }));
-    if (apps.length && cfg.show_other !== false) {
-      apps.push({
+    const tree = this._appTree(cfg.appliances, '');
+    if (tree.length && cfg.show_other !== false) {
+      tree.push({
         name: t.other,
-        w: Math.max(0, s.house_w - sum(apps.map((a) => a.w))),
+        w: Math.max(0, s.house_w - sum(tree.map((a) => a.w))),
         entity: undefined,
         threshold: IDLE_W,
+        kids: [],
+        key: 'other',
+        open: false,
       });
     }
+    // The tree as visible lines: children follow their group when it is open.
+    const apps: AppRow[] = [];
+    const walk = (nodes: AppNode[], depth: number): void =>
+      nodes.forEach((n) => {
+        apps.push({ ...n, depth });
+        if (n.open) walk(n.kids, depth + 1);
+      });
+    walk(tree, 0);
+    // With groups the tree moves to the left edge so that indented children
+    // and their names fit beside the grid node.
+    const nested = tree.some((n) => n.kids.length > 0);
+    const appX0 = nested ? 44 : 100;
+    const APP_INDENT = 34;
+    const appR = (depth: number): number => (depth === 0 ? (nested ? 20 : 22) : 15);
 
     // ---- layout: 480 units wide, height follows the longest column
     const prodY = strings.length ? 150 : 56;
@@ -323,7 +393,12 @@ export class UltimatePowerCard extends LitElement {
     const GRID: Pt = [240, hubY + 120];
     const pvStep = Math.min(110, 400 / Math.max(1, strings.length));
     const pvPos: Pt[] = strings.map((_, i) => [240 + (i - (strings.length - 1) / 2) * pvStep, 50]);
-    const appPos: Pt[] = apps.map((_, i) => [100, hubY + 90 + i * 50]);
+    const appPos: Pt[] = [];
+    apps.forEach((a, i) => {
+      const prev = apps[i - 1];
+      const step = !prev ? 0 : a.depth === 0 ? (prev.depth === 0 ? 50 : 46) : prev.depth < a.depth ? 42 : 36;
+      appPos.push([appX0 + a.depth * APP_INDENT, i ? appPos[i - 1][1] + step : hubY + 90]);
+    });
     const batPos: Pt[] = bats.map((_, i) => [380, hubY + 92 + i * 56]);
     const height = Math.max(
       hubY + 216,
@@ -343,11 +418,39 @@ export class UltimatePowerCard extends LitElement {
     strings.forEach((_, i) => wires.push(this._wire(pvPos[i], PROD, pvW[i], 'pos', false)));
     // Appliances and batteries hang below their node as a chain; each segment
     // carries the sum of everything further down.
-    apps.forEach((_, i) =>
-      wires.push(
-        this._wire(i ? appPos[i - 1] : HOUSE, appPos[i], sum(apps.slice(i).map((a) => a.w)), 'neg', false),
-      ),
-    );
+    // Power still to be delivered along the vertical line of level `level` from
+    // line `from` on: the remaining children of the group that owns the line,
+    // and on the main line also every later top-level item.
+    const below = (level: number, from: number): number => {
+      let total = 0;
+      let q = from;
+      for (; q < apps.length && apps[q].depth > level; q++) if (apps[q].depth === level + 1) total += apps[q].w;
+      if (level === 0) for (; q < apps.length; q++) if (apps[q].depth === 0) total += apps[q].w;
+      return total;
+    };
+    // Last point reached on the vertical line of each level.
+    const tip: Pt[] = [HOUSE];
+    apps.forEach((a, i) => {
+      const p = appPos[i];
+      if (a.depth === 0) {
+        wires.push(this._wire(tip[0], p, below(0, i), 'neg', false));
+      } else {
+        const joint: Pt = [appX0 + (a.depth - 1) * APP_INDENT, p[1]];
+        wires.push(this._wire(tip[a.depth - 1], joint, below(a.depth - 1, i), 'neg', false));
+        wires.push(this._wire(joint, p, a.w, 'neg', false));
+        tip[a.depth - 1] = joint;
+      }
+      tip[a.depth] = p;
+    });
+    // Names are cut to the room they have: the grid node and the battery
+    // column take part of the width at their height.
+    const lastBatY = bats.length ? batPos[bats.length - 1][1] : hubY;
+    const appLabel = (a: AppRow, p: Pt): SVGTemplateResult => {
+      const x = p[0] + appR(a.depth) + 8;
+      const right = p[1] > hubY + 76 && p[1] < hubY + 212 ? 196 : hasBat && p[1] < lastBatY + 34 ? 290 : 472;
+      const mark = a.kids.length ? (a.open ? '▾ ' : '▸ ') : '';
+      return this._text(x, p[1] + 4, 't-n', a.depth ? 10 : 11, fit(mark + a.name, right - x, a.depth ? 10 : 11), 'start');
+    };
     bats.forEach((_, i) => {
       const rest = sum(batW.slice(i));
       wires.push(this._wire(i ? batPos[i - 1] : BAT, batPos[i], Math.abs(rest), 'pos', false, rest >= 0));
@@ -380,8 +483,15 @@ export class UltimatePowerCard extends LitElement {
         ${this._text(100, hubY - 48, 't-n', 13, t.consumption)}
         ${apps.map(
           (a, i) => svg`
-            ${this._smallNode(appPos[i], a.w > a.threshold ? 'neg' : 'idle', this._power(a.w), a.entity)}
-            ${this._text(130, appPos[i][1] + 4, 't-n', 11, a.name, 'start')}
+            ${this._smallNode(
+              appPos[i],
+              a.w > a.threshold ? 'neg' : 'idle',
+              this._power(a.w),
+              a.entity,
+              appR(a.depth),
+              a.kids.length ? () => this._toggle(a.key) : undefined,
+            )}
+            ${appLabel(a, appPos[i])}
           `,
         )}
 

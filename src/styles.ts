@@ -174,10 +174,11 @@ export const cardStyles = css`
     stroke: none;
   }
 
-  /* animation: auto follows the system "reduce motion" setting,
-     always ignores it, off never animates */
+  /* animation: auto - when the system asks for reduced motion, the small dots
+     keep flowing (they are the only thing that shows the direction of energy),
+     the large dot and the pulsing rings are dropped. always ignores the system
+     setting, off never animates. */
   @media (prefers-reduced-motion: reduce) {
-    ha-card:not(.anim-always) .stream,
     ha-card:not(.anim-always) .lead,
     ha-card:not(.anim-always) .pulse {
       animation: none;
