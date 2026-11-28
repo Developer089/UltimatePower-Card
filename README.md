@@ -99,6 +99,7 @@ Power sensors may be in W or kW.
 | `show_w_not_kw` | `false` | Always show watts. |
 | `show_statistics` | `true` | Show the energy balance section. |
 | `statistics` | Energy dashboard | Override the energy sensors: `pv`, `grid_import`, `grid_export`, `battery_charge`, `battery_discharge` (one id or a list each). |
+| `statistics.max_power_kw` | `100` | Highest power your installation can really reach, for example the main breaker of the house. A statistics row with more energy than that power could deliver in the time it covers is a counter glitch (the meter dropped to zero and came back) and is left out; the card says how many it skipped. |
 
 ### Energy balance
 
