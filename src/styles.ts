@@ -62,8 +62,11 @@ export const cardStyles = css`
     stroke-linecap: round;
     animation: up-flow linear infinite;
   }
+  /* Base speeds: the stream covers its 16 px period in 1 s, the lead dot runs
+     100 px/s. The card scales both through the animation playback rate. */
   .stream {
     --p: 16;
+    animation-duration: 1s;
     stroke-width: 3;
     stroke-dasharray: 0.1 15.9;
     opacity: 0.8;

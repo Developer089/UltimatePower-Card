@@ -5,11 +5,18 @@ export interface PVStringConfig {
   name?: string;
 }
 
+/**
+ * Battery power comes either from one signed sensor (power_entity, positive =
+ * discharging) or from two always-positive sensors (charge_entity and
+ * discharge_entity). The pair wins when both forms are given.
+ */
 export interface BatteryConfig {
-  power_entity: string;
+  power_entity?: string;
+  charge_entity?: string;
+  discharge_entity?: string;
   soc_entity: string;
   name?: string;
-  /** Set when the sensor reports charging as a positive value. */
+  /** Set when power_entity reports charging as a positive value. */
   invert?: boolean;
 }
 
@@ -41,6 +48,9 @@ export interface UltimatePowerCardConfig extends LovelaceCardConfig {
   grid_invert?: boolean;
   pv_total_entity?: string;
   battery_total_entity?: string;
+  /** Total battery power as two always-positive sensors instead of battery_total_entity. */
+  battery_charge_entity?: string;
+  battery_discharge_entity?: string;
   /** Set when battery_total_entity reports charging as a positive value. */
   battery_invert?: boolean;
 
@@ -60,6 +70,8 @@ export interface UltimatePowerCardConfig extends LovelaceCardConfig {
   animation_speed?: number;
   /** Power (W) at which the flow animation reaches full speed. Default 10000. */
   max_power?: number;
+  /** How often the card redraws live values, in seconds (1–20). Default 1. */
+  update_interval?: number;
   /** Show the computed remainder of the house load as an extra appliance. Default true. */
   show_other?: boolean;
 

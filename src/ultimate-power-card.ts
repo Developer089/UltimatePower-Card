@@ -21,7 +21,7 @@ import {
 } from './statistics';
 import type { UltimatePowerCardConfig } from './types';
 
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 
 type Pt = [number, number];
 type Tone = 'pos' | 'neg';
@@ -82,6 +82,8 @@ export class UltimatePowerCard extends LitElement {
   private _request = 0;
   private _timer?: number;
   private _swipeX: number | null = null;
+  private _lastRender = 0;
+  private _pending?: number;
 
   public static getStubConfig(): Partial<UltimatePowerCardConfig> {
     return { grid_entity: 'sensor.grid_power' };
@@ -112,6 +114,8 @@ export class UltimatePowerCard extends LitElement {
   public disconnectedCallback(): void {
     super.disconnectedCallback();
     window.clearInterval(this._timer);
+    window.clearTimeout(this._pending);
+    this._pending = undefined;
   }
 
   /** Home Assistant replaces `hass` on every state change; only our entities matter. */
@@ -120,10 +124,37 @@ export class UltimatePowerCard extends LitElement {
     const old = changed.get('hass') as HomeAssistant | undefined;
     if (!old || !this.hass || !this._config) return true;
     if ((old.themes as any)?.darkMode !== (this.hass.themes as any)?.darkMode) return true;
-    return this._entities().some((e) => old.states[e] !== this.hass!.states[e]);
+    if (!this._entities().some((e) => old.states[e] !== this.hass!.states[e])) return false;
+    // Redraw at most once per update_interval; a change that arrives sooner is
+    // picked up by the timer, which renders whatever hass holds by then.
+    const wait = this._lastRender + this._interval() - Date.now();
+    if (wait <= 0) return true;
+    if (this._pending === undefined) {
+      this._pending = window.setTimeout(() => {
+        this._pending = undefined;
+        this.requestUpdate();
+      }, wait);
+    }
+    return false;
+  }
+
+  /** Redraw interval in ms, from update_interval (1–20 s, default 1). */
+  private _interval(): number {
+    const s = Number(this._config?.update_interval ?? 1);
+    return Math.max(1, Math.min(20, isNaN(s) ? 1 : s)) * 1000;
   }
 
   protected updated(): void {
+    this._lastRender = Date.now();
+    // The flow speed is set through the playback rate: unlike a changed
+    // animation-duration it keeps the dots where they are, so they do not jump
+    // every time the power changes.
+    this.renderRoot.querySelectorAll<SVGElement>('[data-rate]').forEach((el) => {
+      const rate = Number(el.dataset.rate);
+      for (const a of el.getAnimations?.() ?? []) {
+        if (rate > 0 && Math.abs(a.playbackRate - rate) > 0.001) a.updatePlaybackRate(rate);
+      }
+    });
     if (this._statsState === 'idle' && this.hass && this._config?.show_statistics !== false) {
       this._loadStats();
     }
@@ -155,8 +186,10 @@ export class UltimatePowerCard extends LitElement {
       c.grid_export_entity,
       c.pv_total_entity,
       c.battery_total_entity,
+      c.battery_charge_entity,
+      c.battery_discharge_entity,
       ...(c.pv_strings ?? []).map((s) => s.power_entity),
-      ...(c.batteries ?? []).flatMap((b) => [b.power_entity, b.soc_entity]),
+      ...(c.batteries ?? []).flatMap((b) => [b.power_entity, b.charge_entity, b.discharge_entity, b.soc_entity]),
       ...(c.appliances ?? []).map((a) => a.power_entity),
     ].filter((e): e is string => !!e);
   }
@@ -201,10 +234,10 @@ export class UltimatePowerCard extends LitElement {
     return svg`
       <path class="wire on" d=${d}></path>
       <path class="stream ${tone} ${main ? 'main' : ''} ${rev}" d=${d}
-        style=${`animation-duration:${(16 / speed).toFixed(3)}s`}></path>
+        data-rate=${(speed / 16).toFixed(3)}></path>
       ${main
-        ? svg`<path class="lead ${tone} ${rev}" d=${d}
-            style=${`--p:${len};stroke-dasharray:0.1 ${len};animation-duration:${(len / speed).toFixed(2)}s`}></path>`
+        ? svg`<path class="lead ${tone} ${rev}" d=${d} data-rate=${(speed / 100).toFixed(3)}
+            style=${`--p:${len};stroke-dasharray:0.1 ${len};animation-duration:${(len / 100).toFixed(2)}s`}></path>`
         : nothing}
     `;
   }
@@ -248,7 +281,8 @@ export class UltimatePowerCard extends LitElement {
     const strings = cfg.pv_strings ?? [];
     const bats = cfg.batteries ?? [];
     const hasPv = strings.length > 0 || !!cfg.pv_total_entity;
-    const hasBat = bats.length > 0 || !!cfg.battery_total_entity;
+    const hasBat =
+      bats.length > 0 || !!(cfg.battery_total_entity || cfg.battery_charge_entity || cfg.battery_discharge_entity);
 
     const pvW = strings.map((x) => Math.max(0, readPower(hass, x.power_entity)));
     const batW = bats.map((b) => readBattery(hass, b));
@@ -349,7 +383,7 @@ export class UltimatePowerCard extends LitElement {
               const soc = Math.max(0, Math.min(100, parseFloat(hass.states?.[b.soc_entity]?.state ?? '') || 0));
               const sign = batW[i] > IDLE_W ? '−' : batW[i] < -IDLE_W ? '+' : '';
               return svg`
-                <g class="n click" @click=${() => this._moreInfo(b.power_entity)}>
+                <g class="n click" @click=${() => this._moreInfo(b.power_entity ?? b.soc_entity)}>
                   <circle class="ring-track" cx=${p[0]} cy=${p[1]} r="24"></circle>
                   <circle class="ring" cx=${p[0]} cy=${p[1]} r="24"
                     stroke-dasharray=${ring.toFixed(1)}
