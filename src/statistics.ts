@@ -18,6 +18,8 @@ export interface StatsResult {
   cons: number[];
   imp: number[];
   exp: number[];
+  /** Number of implausible jumps (counter glitches) left out of the sums. */
+  skipped: number;
 }
 
 interface StatRow {
@@ -38,7 +40,10 @@ export const resolveStatIds = async (
 ): Promise<StatIds | null> => {
   const ids: StatIds = { pv: [], gridIn: [], gridOut: [], batIn: [], batOut: [] };
   const s = cfg.statistics;
-  if (s) {
+  // `statistics` may hold only max_power_kw; the sensors then still come from
+  // the Energy dashboard.
+  const own = !!s && [s.pv, s.grid_import, s.grid_export, s.battery_charge, s.battery_discharge].some((v) => list(v).length);
+  if (s && own) {
     ids.pv = list(s.pv);
     ids.gridIn = list(s.grid_import);
     ids.gridOut = list(s.grid_export);
@@ -155,6 +160,14 @@ const periodRange = (
   };
 };
 
+/**
+ * Statistics are fetched one step finer than they are shown (hours for day,
+ * week and month, days for a year) so that a single bad row can be told apart
+ * from real energy. A meter that drops to zero and comes back makes Home
+ * Assistant book its whole lifetime reading as one hour of energy; any row
+ * above what `maxKw` (the highest real power, e.g. the main breaker of the
+ * house) could deliver in the time it covers is such a glitch and is skipped.
+ */
 export const fetchStats = async (
   hass: HomeAssistant,
   ids: StatIds,
@@ -162,9 +175,14 @@ export const fetchStats = async (
   offset: number,
   lang: string,
   words: { today: string; yesterday: string; thisWeek: string; lastWeek: string },
+  maxKw = 100,
 ): Promise<StatsResult> => {
   const range = periodRange(kind, offset, lang, words);
   const n = range.labels.length;
+  const fine = kind === 'year' ? 'day' : 'hour';
+  const limit = maxKw * (fine === 'day' ? 24 : 1);
+  const stepMs = (fine === 'day' ? 24 : 1) * 3600000;
+  let skipped = 0;
   const all = [...new Set([...ids.pv, ...ids.gridIn, ...ids.gridOut, ...ids.batIn, ...ids.batOut])];
 
   const rows = await hass.callWS<Record<string, StatRow[]>>({
@@ -172,7 +190,7 @@ export const fetchStats = async (
     start_time: range.start.toISOString(),
     end_time: range.end.toISOString(),
     statistic_ids: all,
-    period: range.bucket,
+    period: fine,
     types: ['change'],
     units: { energy: 'kWh' },
   });
@@ -180,9 +198,17 @@ export const fetchStats = async (
   const bucket = (statIds: string[]): number[] => {
     const out = new Array<number>(n).fill(0);
     for (const id of statIds) {
+      let previous: number | null = null;
       for (const row of rows?.[id] ?? []) {
+        // After an outage there are no rows and the first one back holds all the
+        // energy measured meanwhile, so it may hold the limit for every step missed.
+        const at = new Date(row.start).getTime();
+        const steps = previous === null ? 1 : Math.max(1, (at - previous) / stepMs);
+        previous = at;
         const i = range.index(new Date(row.start));
-        if (i >= 0 && i < n && typeof row.change === 'number') out[i] += Math.max(0, row.change);
+        if (i < 0 || i >= n || typeof row.change !== 'number') continue;
+        if (row.change > limit * steps) skipped++;
+        else out[i] += Math.max(0, row.change);
       }
     }
     return out;
@@ -196,5 +222,5 @@ export const fetchStats = async (
   // Same energy balance as the live house load, per bucket.
   const cons = pv.map((p, i) => Math.max(0, p + imp[i] + batOut[i] - exp[i] - batIn[i]));
 
-  return { title: range.title, labels: range.labels, pv, cons, imp, exp };
+  return { title: range.title, labels: range.labels, pv, cons, imp, exp, skipped };
 };

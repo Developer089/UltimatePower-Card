@@ -99,6 +99,7 @@ Senzory výkonu mohou být ve W nebo kW.
 | `show_w_not_kw` | `false` | Vždy zobrazovat watty. |
 | `show_statistics` | `true` | Zobrazit sekci s bilancí energie. |
 | `statistics` | panel Energie | Vlastní senzory energie: `pv`, `grid_import`, `grid_export`, `battery_charge`, `battery_discharge` (u každého jedno id nebo seznam). |
+| `statistics.max_power_kw` | `100` | Nejvyšší výkon, kterého instalace reálně dosáhne, například podle hlavního jističe domu. Řádek statistik s větší energií, než by tento výkon za daný čas dodal, je chybný skok počítadla (měřič spadl na nulu a vrátil se) a vynechá se; karta napíše, kolik jich vynechala. |
 
 ### Bilance energie
 

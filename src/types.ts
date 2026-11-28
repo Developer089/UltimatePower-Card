@@ -33,6 +33,12 @@ export interface StatisticsConfig {
   grid_export?: string | string[];
   battery_charge?: string | string[];
   battery_discharge?: string | string[];
+  /**
+   * Highest power (kW) any of these meters can really reach. A statistics row
+   * showing more energy than this allows is treated as a counter glitch and
+   * left out. Default 100.
+   */
+  max_power_kw?: number;
 }
 
 export interface UltimatePowerCardConfig extends LovelaceCardConfig {

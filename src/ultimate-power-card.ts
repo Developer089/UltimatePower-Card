@@ -21,7 +21,7 @@ import {
 } from './statistics';
 import type { UltimatePowerCardConfig } from './types';
 
-const VERSION = '0.2.1';
+const VERSION = '0.2.2';
 
 type Pt = [number, number];
 type Tone = 'pos' | 'neg';
@@ -30,6 +30,10 @@ type NodeState = Tone | 'idle';
 /** Below this power (W) a node counts as idle and its flow is not animated. */
 const IDLE_W = 5;
 const MAX_OFFSET = 120;
+/** Distance between the small flow dots (px); must match --p of .stream in the styles. */
+const DOT_GAP = 24;
+/** Fastest flow (px/s): about a seventh of DOT_GAP per frame on a 60 Hz screen. */
+const MAX_SPEED = 200;
 const PERIODS: PeriodKind[] = ['day', 'week', 'month', 'year'];
 
 const ICONS = {
@@ -50,6 +54,7 @@ const WORDS = {
     prev: 'Předchozí období', next: 'Další období', loading: 'Načítám statistiky…',
     noStats: 'Statistiky nejsou k dispozici. Nastav panel Energie v Home Assistantu nebo volbu statistics v kartě.',
     statsError: 'Statistiky se nepodařilo načíst.',
+    skipped: 'Vynechané chybné skoky počítadla: {n}. Oprav je v Nástroje pro vývojáře → Statistiky.',
   },
   en: {
     production: 'Production', consumption: 'Consumption', battery: 'Battery', grid: 'Grid',
@@ -61,6 +66,7 @@ const WORDS = {
     prev: 'Previous period', next: 'Next period', loading: 'Loading statistics…',
     noStats: 'No statistics available. Set up the Energy dashboard in Home Assistant or the statistics option of the card.',
     statsError: 'Statistics could not be loaded.',
+    skipped: 'Meter glitches left out: {n}. Fix them in Developer tools → Statistics.',
   },
 };
 
@@ -215,11 +221,17 @@ export class UltimatePowerCard extends LitElement {
     if (entity) fireEvent(this, 'hass-more-info', { entityId: entity });
   }
 
-  /** Dot speed in px/s. Grows steeply with power so that the difference is obvious. */
+  /**
+   * Dot speed in px/s. Grows steeply with power so that the difference is
+   * obvious, but stays capped: the dots repeat every DOT_GAP px, and once they
+   * travel a large part of that gap per screen frame the eye no longer sees
+   * movement, only a still, denser dotted line.
+   */
   private _speed(w: number): number {
     const max = this._config?.max_power ?? 10000;
-    const k = Math.min(w, 1.2 * max) / max;
-    return (10 + 200 * Math.pow(k, 0.8)) * Math.max(0.1, this._config?.animation_speed ?? 1);
+    const k = Math.min(w, max) / max;
+    const speed = (8 + 132 * Math.pow(k, 0.8)) * Math.max(0.1, this._config?.animation_speed ?? 1);
+    return Math.min(speed, MAX_SPEED);
   }
 
   // ------------------------------------------------------------- flow diagram
@@ -234,7 +246,7 @@ export class UltimatePowerCard extends LitElement {
     return svg`
       <path class="wire on" d=${d}></path>
       <path class="stream ${tone} ${main ? 'main' : ''} ${rev}" d=${d}
-        data-rate=${(speed / 16).toFixed(3)}></path>
+        data-rate=${(speed / DOT_GAP).toFixed(3)}></path>
       ${main
         ? svg`<path class="lead ${tone} ${rev}" d=${d} data-rate=${(speed / 100).toFixed(3)}
             style=${`--p:${len};stroke-dasharray:0.1 ${len};animation-duration:${(len / 100).toFixed(2)}s`}></path>`
@@ -425,7 +437,10 @@ export class UltimatePowerCard extends LitElement {
         this._statsState = 'none';
         return;
       }
-      const stats = await fetchStats(hass, this._statIds, this._period, this._offset, hass.language ?? 'en', this._w);
+      const stats = await fetchStats(
+        hass, this._statIds, this._period, this._offset, hass.language ?? 'en', this._w,
+        Number(cfg.statistics?.max_power_kw) > 0 ? Number(cfg.statistics!.max_power_kw) : 100,
+      );
       if (request !== this._request) return;
       this._stats = stats;
       this._statsState = 'ready';
@@ -497,6 +512,7 @@ export class UltimatePowerCard extends LitElement {
                 <span>kWh</span>
               </div>
               ${this._renderChart(st)}
+              ${st.skipped ? html`<div class="note">${t.skipped.replace('{n}', String(st.skipped))}</div>` : nothing}
             `}
       </div>
     `;
