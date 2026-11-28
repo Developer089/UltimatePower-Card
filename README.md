@@ -90,16 +90,37 @@ Power sensors may be in W or kW.
 | `batteries[]` | – | `soc_entity`, optional `name`, and the power either as one signed sensor `power_entity` (positive = discharging, `invert` flips it) or as two always-positive sensors `charge_entity` + `discharge_entity`. |
 | `battery_total_entity`, `battery_invert` | sum of batteries | Total battery power and its sign switch. |
 | `battery_charge_entity`, `battery_discharge_entity` | – | Total battery power as two always-positive sensors. |
-| `appliances[]` | – | `power_entity`, `name`, optional `on_threshold_w`. |
+| `appliances[]` | – | `name`, `power_entity`, optional `on_threshold_w`. With `children` (a list of the same shape) the item becomes a group; `collapsed: true` starts it closed. See [Appliance groups](#appliance-groups). |
 | `show_other` | `true` | Show the computed remainder of the house load. |
 | `update_interval` | `1` | How often the card redraws live values, in seconds (1–20). Sensors are not read more often than they report. |
-| `animation` | `auto` | `auto` follows the system "reduce motion" setting, `always` ignores it, `off` never animates. |
+| `animation` | `auto` | `auto`: when the system asks for reduced motion, only the small flow dots move (they show the direction of energy) and the large dot and pulsing rings are hidden. `always` animates everything regardless, `off` never animates. |
 | `animation_speed` | `1` | Multiplier for the flow speed. |
 | `max_power` | `10000` | Power (W) at which the flow reaches full speed. |
 | `show_w_not_kw` | `false` | Always show watts. |
 | `show_statistics` | `true` | Show the energy balance section. |
 | `statistics` | Energy dashboard | Override the energy sensors: `pv`, `grid_import`, `grid_export`, `battery_charge`, `battery_discharge` (one id or a list each). |
 | `statistics.max_power_kw` | `100` | Highest power your installation can really reach, for example the main breaker of the house. A statistics row with more energy than that power could deliver in the time it covers is a counter glitch (the meter dropped to zero and came back) and is left out; the card says how many it skipped. |
+
+### Appliance groups
+
+Appliances can be nested, for example main meter → flat → its appliances. Give an item `children` and it becomes a group. A click on the group hides or shows its children.
+
+```yaml
+appliances:
+  - name: Ground floor
+    power_entity: sensor.ground_floor_power      # sub-meter of the flat
+    children:
+      - { name: Washer, power_entity: sensor.gf_washer_power }
+      - { name: Dryer, power_entity: sensor.gf_dryer_power }
+  - name: First floor
+    collapsed: true                               # closed until clicked
+    children:                                     # no sub-meter: the group shows the sum
+      - { name: Washer, power_entity: sensor.ff_washer_power }
+      - { name: Dryer, power_entity: sensor.ff_dryer_power }
+  - { name: Heat pump, power_entity: sensor.heat_pump_power }
+```
+
+A group with its own `power_entity` shows that sensor; without one it shows the sum of its children. "Other" at the end is the house load minus the top-level items, so children must not be listed a second time at the top level.
 
 ### Energy balance
 

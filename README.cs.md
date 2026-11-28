@@ -90,16 +90,37 @@ Senzory výkonu mohou být ve W nebo kW.
 | `batteries[]` | – | `soc_entity`, volitelně `name` a výkon buď jedním senzorem se znaménkem `power_entity` (kladná hodnota = vybíjení, `invert` ho otočí), nebo dvěma vždy kladnými senzory `charge_entity` + `discharge_entity`. |
 | `battery_total_entity`, `battery_invert` | součet baterií | Celkový výkon baterií a přepínač jeho znaménka. |
 | `battery_charge_entity`, `battery_discharge_entity` | – | Celkový výkon baterií dvěma vždy kladnými senzory. |
-| `appliances[]` | – | `power_entity`, `name`, volitelně `on_threshold_w`. |
+| `appliances[]` | – | `name`, `power_entity`, volitelně `on_threshold_w`. S `children` (seznam stejného tvaru) se z položky stane skupina; `collapsed: true` ji zobrazí zavřenou. Viz [Skupiny spotřebičů](#skupiny-spotřebičů). |
 | `show_other` | `true` | Zobrazit dopočtený zbytek spotřeby domu. |
 | `update_interval` | `1` | Jak často karta překresluje živé hodnoty, v sekundách (1–20). Senzory se nečtou častěji, než samy hlásí. |
-| `animation` | `auto` | `auto` se řídí systémovým omezením pohybu, `always` ho ignoruje, `off` animace vypne. |
+| `animation` | `auto` | `auto`: když systém žádá omezení pohybu, hýbou se jen malé tečky toku (ukazují směr energie) a velká tečka s pulzováním se skryjí. `always` animuje vše bez ohledu na systém, `off` animace vypne. |
 | `animation_speed` | `1` | Násobitel rychlosti toku. |
 | `max_power` | `10000` | Výkon (W), při kterém tok dosáhne plné rychlosti. |
 | `show_w_not_kw` | `false` | Vždy zobrazovat watty. |
 | `show_statistics` | `true` | Zobrazit sekci s bilancí energie. |
 | `statistics` | panel Energie | Vlastní senzory energie: `pv`, `grid_import`, `grid_export`, `battery_charge`, `battery_discharge` (u každého jedno id nebo seznam). |
 | `statistics.max_power_kw` | `100` | Nejvyšší výkon, kterého instalace reálně dosáhne, například podle hlavního jističe domu. Řádek statistik s větší energií, než by tento výkon za daný čas dodal, je chybný skok počítadla (měřič spadl na nulu a vrátil se) a vynechá se; karta napíše, kolik jich vynechala. |
+
+### Skupiny spotřebičů
+
+Spotřebiče jde vnořovat, například hlavní elektroměr → byt → jeho spotřebiče. Položka s `children` je skupina. Klik na skupinu její spotřebiče skryje nebo zobrazí.
+
+```yaml
+appliances:
+  - name: Byt přízemí
+    power_entity: sensor.prizemi_vykon           # podružný elektroměr bytu
+    children:
+      - { name: Pračka, power_entity: sensor.prizemi_pracka }
+      - { name: Sušička, power_entity: sensor.prizemi_susicka }
+  - name: Byt patro
+    collapsed: true                               # zavřená, dokud se neklikne
+    children:                                     # bez elektroměru: skupina ukáže součet
+      - { name: Pračka, power_entity: sensor.patro_pracka }
+      - { name: Sušička, power_entity: sensor.patro_susicka }
+  - { name: Tepelné čerpadlo, power_entity: sensor.tc_vykon }
+```
+
+Skupina s vlastní `power_entity` ukazuje tento senzor; bez ní ukazuje součet svých spotřebičů. „Ostatní" na konci je spotřeba domu minus položky nejvyšší úrovně, proto spotřebiče ze skupin nesmí být uvedené ještě jednou samostatně.
 
 ### Bilance energie
 

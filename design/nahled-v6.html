@@ -1,0 +1,719 @@
+<title>UltimatePower Card</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+  /* Layout: the live card in one dashboard-width column, a control panel beside it; they stack on a phone. */
+  :root {
+    --bg: #eef0ec;
+    --surface: #ffffff;
+    --inset: #e4e7e1;
+    --text: #171a16;
+    --muted: #5a6157;
+    --line: rgba(23, 26, 22, 0.14);
+    --accent: #2c9631;
+    --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+    --font-body: Inter, "Segoe UI", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #101210; --surface: #1b1d1b; --inset: #272a27; --text: #e4e7e2; --muted: #9aa197;
+      --line: rgba(228, 231, 226, 0.14); --accent: #8fe36a; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #101210; --surface: #1b1d1b; --inset: #272a27; --text: #e4e7e2; --muted: #9aa197;
+    --line: rgba(228, 231, 226, 0.14); --accent: #8fe36a; color-scheme: dark;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.5;
+    padding-block: 28px 40px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    /* what the card reads from a Home Assistant theme */
+    --card-background-color: var(--surface);
+    --primary-text-color: var(--text);
+    --secondary-text-color: var(--muted);
+    --divider-color: var(--line);
+    --secondary-background-color: var(--inset);
+  }
+  .page { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+  header h1 { font-family: var(--font-display); font-size: 26px; font-weight: 600; margin: 0 0 4px; text-wrap: balance; }
+  header p { margin: 0; color: var(--muted); max-width: 62ch; }
+  .cols { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
+  .card-col { flex: 1 1 340px; max-width: 490px; min-width: 0; }
+  .panel { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+  ha-card { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+  .panel h2 { font-family: var(--font-display); font-size: 15px; font-weight: 600; margin: 0 0 10px; }
+  .group { display: flex; flex-direction: column; gap: 12px; }
+  .ctl { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: baseline; }
+  .ctl label { color: var(--text); }
+  .ctl output { font-variant-numeric: tabular-nums; color: var(--muted); }
+  .ctl input[type="range"] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); margin: 0; }
+  .check { display: flex; gap: 8px; align-items: center; }
+  .check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+  .hint { color: var(--muted); font-size: 13px; margin: 0; }
+  .hint b { color: var(--text); font-weight: 600; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 0; }
+  input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="page">
+  <header>
+    <h1>UltimatePower Card</h1>
+    <p>Živý náhled karty verze 0.3 se skupinami spotřebičů. Běží tu skutečný kód karty, data jsou ukázková a řídí se posuvníky vpravo.</p>
+  </header>
+  <div class="cols">
+    <div class="card-col" id="mount"></div>
+    <div class="panel">
+      <div>
+        <h2>Výroba a spotřeba</h2>
+        <div class="group">
+          <div class="ctl"><label for="pv">Výroba FVE</label><output id="pv-o"></output>
+            <input id="pv" type="range" min="0" max="10000" step="100" value="4200"></div>
+          <div class="ctl"><label for="pracka">Pračka v 2NP</label><output id="pracka-o"></output>
+            <input id="pracka" type="range" min="0" max="2200" step="50" value="1900"></div>
+          <div class="ctl"><label for="bazen">Bazénové tepelné čerpadlo</label><output id="bazen-o"></output>
+            <input id="bazen" type="range" min="0" max="2500" step="50" value="900"></div>
+          <div class="ctl"><label for="tc">Tepelné čerpadlo</label><output id="tc-o"></output>
+            <input id="tc" type="range" min="0" max="4000" step="100" value="1400"></div>
+          <div class="ctl"><label for="wb">Wallbox</label><output id="wb-o"></output>
+            <input id="wb" type="range" min="0" max="11000" step="500" value="0"></div>
+        </div>
+      </div>
+      <hr>
+      <div class="group">
+        <label class="check"><input id="stats" type="checkbox" checked> Bilance energie pod schématem</label>
+        <label class="check"><input id="other" type="checkbox" checked> Položka Ostatní</label>
+      </div>
+      <hr>
+      <p class="hint"><b>Skupiny:</b> klikni v kartě na kolečko <b>2NP</b> nebo <b>Dílna</b>. Skupina se sbalí nebo rozbalí. Dílna začíná sbalená.</p>
+      <p class="hint"><b>Baterie</b> se v náhledu řídí sama: přebytek z FVE nabíjí, nedostatek vybíjí, nejvýš 3 kW. Zbytek jde ze sítě nebo do sítě.</p>
+    </div>
+  </div>
+</div>
+
+<script type="module">function t(t,e,s,i){var r,n=arguments.length,o=n<3?e:null===i?i=Object.getOwnPropertyDescriptor(e,s):i;if("object"==typeof Reflect&&"function"==typeof Reflect.decorate)o=Reflect.decorate(t,e,s,i);else for(var a=t.length-1;a>=0;a--)(r=t[a])&&(o=(n<3?r(o):n>3?r(e,s,o):r(e,s))||o);return n>3&&o&&Object.defineProperty(e,s,o),o}"function"==typeof SuppressedError&&SuppressedError;const e=globalThis,s=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow)&&"adoptedStyleSheets"in Document.prototype&&"replace"in CSSStyleSheet.prototype,i=Symbol(),r=new WeakMap;let n=class{constructor(t,e,s){if(this._$cssResult$=!0,s!==i)throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");this.cssText=t,this.t=e}get styleSheet(){let t=this.o;const e=this.t;if(s&&void 0===t){const s=void 0!==e&&1===e.length;s&&(t=r.get(e)),void 0===t&&((this.o=t=new CSSStyleSheet).replaceSync(this.cssText),s&&r.set(e,t))}return t}toString(){return this.cssText}};const o=s?t=>t:t=>t instanceof CSSStyleSheet?(t=>{let e="";for(const s of t.cssRules)e+=s.cssText;return(t=>new n("string"==typeof t?t:t+"",void 0,i))(e)})(t):t,{is:a,defineProperty:h,getOwnPropertyDescriptor:l,getOwnPropertyNames:p,getOwnPropertySymbols:d,getPrototypeOf:c}=Object,u=globalThis,g=u.trustedTypes,_=g?g.emptyScript:"",f=u.reactiveElementPolyfillSupport,m=(t,e)=>t,y={toAttribute(t,e){switch(e){case Boolean:t=t?_:null;break;case Object:case Array:t=null==t?t:JSON.stringify(t)}return t},fromAttribute(t,e){let s=t;switch(e){case Boolean:s=null!==t;break;case Number:s=null===t?null:Number(t);break;case Object:case Array:try{s=JSON.parse(t)}catch(t){s=null}}return s}},$=(t,e)=>!a(t,e),v={attribute:!0,type:String,converter:y,reflect:!1,useDefault:!1,hasChanged:$};Symbol.metadata??=Symbol("metadata"),u.litPropertyMetadata??=new WeakMap;let w=class extends HTMLElement{static addInitializer(t){this._$Ei(),(this.l??=[]).push(t)}static get observedAttributes(){return this.finalize(),this._$Eh&&[...this._$Eh.keys()]}static createProperty(t,e=v){if(e.state&&(e.attribute=!1),this._$Ei(),this.prototype.hasOwnProperty(t)&&((e=Object.create(e)).wrapped=!0),this.elementProperties.set(t,e),!e.noAccessor){const s=Symbol(),i=this.getPropertyDescriptor(t,s,e);void 0!==i&&h(this.prototype,t,i)}}static getPropertyDescriptor(t,e,s){const{get:i,set:r}=l(this.prototype,t)??{get(){return this[e]},set(t){this[e]=t}};return{get:i,set(e){const n=i?.call(this);r?.call(this,e),this.requestUpdate(t,n,s)},configurable:!0,enumerable:!0}}static getPropertyOptions(t){return this.elementProperties.get(t)??v}static _$Ei(){if(this.hasOwnProperty(m("elementProperties")))return;const t=c(this);t.finalize(),void 0!==t.l&&(this.l=[...t.l]),this.elementProperties=new Map(t.elementProperties)}static finalize(){if(this.hasOwnProperty(m("finalized")))return;if(this.finalized=!0,this._$Ei(),this.hasOwnProperty(m("properties"))){const t=this.properties,e=[...p(t),...d(t)];for(const s of e)this.createProperty(s,t[s])}const t=this[Symbol.metadata];if(null!==t){const e=litPropertyMetadata.get(t);if(void 0!==e)for(const[t,s]of e)this.elementProperties.set(t,s)}this._$Eh=new Map;for(const[t,e]of this.elementProperties){const s=this._$Eu(t,e);void 0!==s&&this._$Eh.set(s,t)}this.elementStyles=this.finalizeStyles(this.styles)}static finalizeStyles(t){const e=[];if(Array.isArray(t)){const s=new Set(t.flat(1/0).reverse());for(const t of s)e.unshift(o(t))}else void 0!==t&&e.push(o(t));return e}static _$Eu(t,e){const s=e.attribute;return!1===s?void 0:"string"==typeof s?s:"string"==typeof t?t.toLowerCase():void 0}constructor(){super(),this._$Ep=void 0,this.isUpdatePending=!1,this.hasUpdated=!1,this._$Em=null,this._$Ev()}_$Ev(){this._$ES=new Promise(t=>this.enableUpdating=t),this._$AL=new Map,this._$E_(),this.requestUpdate(),this.constructor.l?.forEach(t=>t(this))}addController(t){(this._$EO??=new Set).add(t),void 0!==this.renderRoot&&this.isConnected&&t.hostConnected?.()}removeController(t){this._$EO?.delete(t)}_$E_(){const t=new Map,e=this.constructor.elementProperties;for(const s of e.keys())this.hasOwnProperty(s)&&(t.set(s,this[s]),delete this[s]);t.size>0&&(this._$Ep=t)}createRenderRoot(){const t=this.shadowRoot??this.attachShadow(this.constructor.shadowRootOptions);return((t,i)=>{if(s)t.adoptedStyleSheets=i.map(t=>t instanceof CSSStyleSheet?t:t.styleSheet);else for(const s of i){const i=document.createElement("style"),r=e.litNonce;void 0!==r&&i.setAttribute("nonce",r),i.textContent=s.cssText,t.appendChild(i)}})(t,this.constructor.elementStyles),t}connectedCallback(){this.renderRoot??=this.createRenderRoot(),this.enableUpdating(!0),this._$EO?.forEach(t=>t.hostConnected?.())}enableUpdating(t){}disconnectedCallback(){this._$EO?.forEach(t=>t.hostDisconnected?.())}attributeChangedCallback(t,e,s){this._$AK(t,s)}_$ET(t,e){const s=this.constructor.elementProperties.get(t),i=this.constructor._$Eu(t,s);if(void 0!==i&&!0===s.reflect){const r=(void 0!==s.converter?.toAttribute?s.converter:y).toAttribute(e,s.type);this._$Em=t,null==r?this.removeAttribute(i):this.setAttribute(i,r),this._$Em=null}}_$AK(t,e){const s=this.constructor,i=s._$Eh.get(t);if(void 0!==i&&this._$Em!==i){const t=s.getPropertyOptions(i),r="function"==typeof t.converter?{fromAttribute:t.converter}:void 0!==t.converter?.fromAttribute?t.converter:y;this._$Em=i;const n=r.fromAttribute(e,t.type);this[i]=n??this._$Ej?.get(i)??n,this._$Em=null}}requestUpdate(t,e,s,i=!1,r){if(void 0!==t){const n=this.constructor;if(!1===i&&(r=this[t]),s??=n.getPropertyOptions(t),!((s.hasChanged??$)(r,e)||s.useDefault&&s.reflect&&r===this._$Ej?.get(t)&&!this.hasAttribute(n._$Eu(t,s))))return;this.C(t,e,s)}!1===this.isUpdatePending&&(this._$ES=this._$EP())}C(t,e,{useDefault:s,reflect:i,wrapped:r},n){s&&!(this._$Ej??=new Map).has(t)&&(this._$Ej.set(t,n??e??this[t]),!0!==r||void 0!==n)||(this._$AL.has(t)||(this.hasUpdated||s||(e=void 0),this._$AL.set(t,e)),!0===i&&this._$Em!==t&&(this._$Eq??=new Set).add(t))}async _$EP(){this.isUpdatePending=!0;try{await this._$ES}catch(t){Promise.reject(t)}const t=this.scheduleUpdate();return null!=t&&await t,!this.isUpdatePending}scheduleUpdate(){return this.performUpdate()}performUpdate(){if(!this.isUpdatePending)return;if(!this.hasUpdated){if(this.renderRoot??=this.createRenderRoot(),this._$Ep){for(const[t,e]of this._$Ep)this[t]=e;this._$Ep=void 0}const t=this.constructor.elementProperties;if(t.size>0)for(const[e,s]of t){const{wrapped:t}=s,i=this[e];!0!==t||this._$AL.has(e)||void 0===i||this.C(e,void 0,s,i)}}let t=!1;const e=this._$AL;try{t=this.shouldUpdate(e),t?(this.willUpdate(e),this._$EO?.forEach(t=>t.hostUpdate?.()),this.update(e)):this._$EM()}catch(e){throw t=!1,this._$EM(),e}t&&this._$AE(e)}willUpdate(t){}_$AE(t){this._$EO?.forEach(t=>t.hostUpdated?.()),this.hasUpdated||(this.hasUpdated=!0,this.firstUpdated(t)),this.updated(t)}_$EM(){this._$AL=new Map,this.isUpdatePending=!1}get updateComplete(){return this.getUpdateComplete()}getUpdateComplete(){return this._$ES}shouldUpdate(t){return!0}update(t){this._$Eq&&=this._$Eq.forEach(t=>this._$ET(t,this[t])),this._$EM()}updated(t){}firstUpdated(t){}};w.elementStyles=[],w.shadowRootOptions={mode:"open"},w[m("elementProperties")]=new Map,w[m("finalized")]=new Map,f?.({ReactiveElement:w}),(u.reactiveElementVersions??=[]).push("2.1.2");const b=globalThis,x=t=>t,k=b.trustedTypes,A=k?k.createPolicy("lit-html",{createHTML:t=>t}):void 0,S="$lit$",M=`lit$${Math.random().toFixed(9).slice(2)}$`,E="?"+M,C=`<${E}>`,P=document,O=()=>P.createComment(""),D=t=>null===t||"object"!=typeof t&&"function"!=typeof t,N=Array.isArray,T="[ \t\n\f\r]",U=/<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g,I=/-->/g,H=/>/g,R=RegExp(`>|${T}(?:([^\\s"'>=/]+)(${T}*=${T}*(?:[^ \t\n\f\r"'\`<>=]|("|')|))|$)`,"g"),z=/'/g,j=/"/g,F=/^(?:script|style|textarea|title)$/i,L=t=>(e,...s)=>({_$litType$:t,strings:e,values:s}),W=L(1),B=L(2),Y=Symbol.for("lit-noChange"),q=Symbol.for("lit-nothing"),V=new WeakMap,X=P.createTreeWalker(P,129);function K(t,e){if(!N(t)||!t.hasOwnProperty("raw"))throw Error("invalid template strings array");return void 0!==A?A.createHTML(e):e}const G=(t,e)=>{const s=t.length-1,i=[];let r,n=2===e?"<svg>":3===e?"<math>":"",o=U;for(let e=0;e<s;e++){const s=t[e];let a,h,l=-1,p=0;for(;p<s.length&&(o.lastIndex=p,h=o.exec(s),null!==h);)p=o.lastIndex,o===U?"!--"===h[1]?o=I:void 0!==h[1]?o=H:void 0!==h[2]?(F.test(h[2])&&(r=RegExp("</"+h[2],"g")),o=R):void 0!==h[3]&&(o=R):o===R?">"===h[0]?(o=r??U,l=-1):void 0===h[1]?l=-2:(l=o.lastIndex-h[2].length,a=h[1],o=void 0===h[3]?R:'"'===h[3]?j:z):o===j||o===z?o=R:o===I||o===H?o=U:(o=R,r=void 0);const d=o===R&&t[e+1].startsWith("/>")?" ":"";n+=o===U?s+C:l>=0?(i.push(a),s.slice(0,l)+S+s.slice(l)+M+d):s+M+(-2===l?e:d)}return[K(t,n+(t[s]||"<?>")+(2===e?"</svg>":3===e?"</math>":"")),i]};class Z{constructor({strings:t,_$litType$:e},s){let i;this.parts=[];let r=0,n=0;const o=t.length-1,a=this.parts,[h,l]=G(t,e);if(this.el=Z.createElement(h,s),X.currentNode=this.el.content,2===e||3===e){const t=this.el.content.firstChild;t.replaceWith(...t.childNodes)}for(;null!==(i=X.nextNode())&&a.length<o;){if(1===i.nodeType){if(i.hasAttributes())for(const t of i.getAttributeNames())if(t.endsWith(S)){const e=l[n++],s=i.getAttribute(t).split(M),o=/([.?@])?(.*)/.exec(e);a.push({type:1,index:r,name:o[2],strings:s,ctor:"."===o[1]?st:"?"===o[1]?it:"@"===o[1]?rt:et}),i.removeAttribute(t)}else t.startsWith(M)&&(a.push({type:6,index:r}),i.removeAttribute(t));if(F.test(i.tagName)){const t=i.textContent.split(M),e=t.length-1;if(e>0){i.textContent=k?k.emptyScript:"";for(let s=0;s<e;s++)i.append(t[s],O()),X.nextNode(),a.push({type:2,index:++r});i.append(t[e],O())}}}else if(8===i.nodeType)if(i.data===E)a.push({type:2,index:r});else{let t=-1;for(;-1!==(t=i.data.indexOf(M,t+1));)a.push({type:7,index:r}),t+=M.length-1}r++}}static createElement(t,e){const s=P.createElement("template");return s.innerHTML=t,s}}function J(t,e,s=t,i){if(e===Y)return e;let r=void 0!==i?s._$Co?.[i]:s._$Cl;const n=D(e)?void 0:e._$litDirective$;return r?.constructor!==n&&(r?._$AO?.(!1),void 0===n?r=void 0:(r=new n(t),r._$AT(t,s,i)),void 0!==i?(s._$Co??=[])[i]=r:s._$Cl=r),void 0!==r&&(e=J(t,r._$AS(t,e.values),r,i)),e}class Q{constructor(t,e){this._$AV=[],this._$AN=void 0,this._$AD=t,this._$AM=e}get parentNode(){return this._$AM.parentNode}get _$AU(){return this._$AM._$AU}u(t){const{el:{content:e},parts:s}=this._$AD,i=(t?.creationScope??P).importNode(e,!0);X.currentNode=i;let r=X.nextNode(),n=0,o=0,a=s[0];for(;void 0!==a;){if(n===a.index){let e;2===a.type?e=new tt(r,r.nextSibling,this,t):1===a.type?e=new a.ctor(r,a.name,a.strings,this,t):6===a.type&&(e=new nt(r,this,t)),this._$AV.push(e),a=s[++o]}n!==a?.index&&(r=X.nextNode(),n++)}return X.currentNode=P,i}p(t){let e=0;for(const s of this._$AV)void 0!==s&&(void 0!==s.strings?(s._$AI(t,s,e),e+=s.strings.length-2):s._$AI(t[e])),e++}}class tt{get _$AU(){return this._$AM?._$AU??this._$Cv}constructor(t,e,s,i){this.type=2,this._$AH=q,this._$AN=void 0,this._$AA=t,this._$AB=e,this._$AM=s,this.options=i,this._$Cv=i?.isConnected??!0}get parentNode(){let t=this._$AA.parentNode;const e=this._$AM;return void 0!==e&&11===t?.nodeType&&(t=e.parentNode),t}get startNode(){return this._$AA}get endNode(){return this._$AB}_$AI(t,e=this){t=J(this,t,e),D(t)?t===q||null==t||""===t?(this._$AH!==q&&this._$AR(),this._$AH=q):t!==this._$AH&&t!==Y&&this._(t):void 0!==t._$litType$?this.$(t):void 0!==t.nodeType?this.T(t):(t=>N(t)||"function"==typeof t?.[Symbol.iterator])(t)?this.k(t):this._(t)}O(t){return this._$AA.parentNode.insertBefore(t,this._$AB)}T(t){this._$AH!==t&&(this._$AR(),this._$AH=this.O(t))}_(t){this._$AH!==q&&D(this._$AH)?this._$AA.nextSibling.data=t:this.T(P.createTextNode(t)),this._$AH=t}$(t){const{values:e,_$litType$:s}=t,i="number"==typeof s?this._$AC(t):(void 0===s.el&&(s.el=Z.createElement(K(s.h,s.h[0]),this.options)),s);if(this._$AH?._$AD===i)this._$AH.p(e);else{const t=new Q(i,this),s=t.u(this.options);t.p(e),this.T(s),this._$AH=t}}_$AC(t){let e=V.get(t.strings);return void 0===e&&V.set(t.strings,e=new Z(t)),e}k(t){N(this._$AH)||(this._$AH=[],this._$AR());const e=this._$AH;let s,i=0;for(const r of t)i===e.length?e.push(s=new tt(this.O(O()),this.O(O()),this,this.options)):s=e[i],s._$AI(r),i++;i<e.length&&(this._$AR(s&&s._$AB.nextSibling,i),e.length=i)}_$AR(t=this._$AA.nextSibling,e){for(this._$AP?.(!1,!0,e);t!==this._$AB;){const e=x(t).nextSibling;x(t).remove(),t=e}}setConnected(t){void 0===this._$AM&&(this._$Cv=t,this._$AP?.(t))}}class et{get tagName(){return this.element.tagName}get _$AU(){return this._$AM._$AU}constructor(t,e,s,i,r){this.type=1,this._$AH=q,this._$AN=void 0,this.element=t,this.name=e,this._$AM=i,this.options=r,s.length>2||""!==s[0]||""!==s[1]?(this._$AH=Array(s.length-1).fill(new String),this.strings=s):this._$AH=q}_$AI(t,e=this,s,i){const r=this.strings;let n=!1;if(void 0===r)t=J(this,t,e,0),n=!D(t)||t!==this._$AH&&t!==Y,n&&(this._$AH=t);else{const i=t;let o,a;for(t=r[0],o=0;o<r.length-1;o++)a=J(this,i[s+o],e,o),a===Y&&(a=this._$AH[o]),n||=!D(a)||a!==this._$AH[o],a===q?t=q:t!==q&&(t+=(a??"")+r[o+1]),this._$AH[o]=a}n&&!i&&this.j(t)}j(t){t===q?this.element.removeAttribute(this.name):this.element.setAttribute(this.name,t??"")}}class st extends et{constructor(){super(...arguments),this.type=3}j(t){this.element[this.name]=t===q?void 0:t}}class it extends et{constructor(){super(...arguments),this.type=4}j(t){this.element.toggleAttribute(this.name,!!t&&t!==q)}}class rt extends et{constructor(t,e,s,i,r){super(t,e,s,i,r),this.type=5}_$AI(t,e=this){if((t=J(this,t,e,0)??q)===Y)return;const s=this._$AH,i=t===q&&s!==q||t.capture!==s.capture||t.once!==s.once||t.passive!==s.passive,r=t!==q&&(s===q||i);i&&this.element.removeEventListener(this.name,this,s),r&&this.element.addEventListener(this.name,this,t),this._$AH=t}handleEvent(t){"function"==typeof this._$AH?this._$AH.call(this.options?.host??this.element,t):this._$AH.handleEvent(t)}}class nt{constructor(t,e,s){this.element=t,this.type=6,this._$AN=void 0,this._$AM=e,this.options=s}get _$AU(){return this._$AM._$AU}_$AI(t){J(this,t)}}const ot=b.litHtmlPolyfillSupport;ot?.(Z,tt),(b.litHtmlVersions??=[]).push("3.3.3");const at=globalThis;class ht extends w{constructor(){super(...arguments),this.renderOptions={host:this},this._$Do=void 0}createRenderRoot(){const t=super.createRenderRoot();return this.renderOptions.renderBefore??=t.firstChild,t}update(t){const e=this.render();this.hasUpdated||(this.renderOptions.isConnected=this.isConnected),super.update(t),this._$Do=((t,e,s)=>{const i=s?.renderBefore??e;let r=i._$litPart$;if(void 0===r){const t=s?.renderBefore??null;i._$litPart$=r=new tt(e.insertBefore(O(),t),t,void 0,s??{})}return r._$AI(t),r})(e,this.renderRoot,this.renderOptions)}connectedCallback(){super.connectedCallback(),this._$Do?.setConnected(!0)}disconnectedCallback(){super.disconnectedCallback(),this._$Do?.setConnected(!1)}render(){return Y}}ht._$litElement$=!0,ht.finalized=!0,at.litElementHydrateSupport?.({LitElement:ht});const lt=at.litElementPolyfillSupport;lt?.({LitElement:ht}),(at.litElementVersions??=[]).push("4.2.2");const pt={attribute:!0,type:String,converter:y,reflect:!1,hasChanged:$},dt=(t=pt,e,s)=>{const{kind:i,metadata:r}=s;let n=globalThis.litPropertyMetadata.get(r);if(void 0===n&&globalThis.litPropertyMetadata.set(r,n=new Map),"setter"===i&&((t=Object.create(t)).wrapped=!0),n.set(s.name,t),"accessor"===i){const{name:i}=s;return{set(s){const r=e.get.call(this);e.set.call(this,s),this.requestUpdate(i,r,t,!0,s)},init(e){return void 0!==e&&this.C(i,void 0,t,e),e}}}if("setter"===i){const{name:i}=s;return function(s){const r=this[i];e.call(this,s),this.requestUpdate(i,r,t,!0,s)}}throw Error("Unsupported decorator location: "+i)};function ct(t){return(e,s)=>"object"==typeof s?dt(t,e,s):((t,e,s)=>{const i=e.hasOwnProperty(s);return e.constructor.createProperty(s,t),i?Object.getOwnPropertyDescriptor(e,s):void 0})(t,e,s)}function ut(t){return ct({...t,state:!0,attribute:!1})}var gt,_t;!function(t){t.language="language",t.system="system",t.comma_decimal="comma_decimal",t.decimal_comma="decimal_comma",t.space_comma="space_comma",t.none="none"}(gt||(gt={})),function(t){t.language="language",t.system="system",t.am_pm="12",t.twenty_four="24"}(_t||(_t={}));const ft=((t,...e)=>{const s=1===t.length?t[0]:e.reduce((e,s,i)=>e+(t=>{if(!0===t._$cssResult$)return t.cssText;if("number"==typeof t)return t;throw Error("Value passed to 'css' function must be a 'css' function result: "+t+". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.")})(s)+t[i+1],t[0]);return new n(s,t,i)})`
+  :host {
+    display: block;
+  }
+  ha-card {
+    /* light theme values; .dark below swaps them */
+    --up-pos: #2c9631;        /* own energy: production, battery, export */
+    --up-neg: #e0661a;        /* consumption and grid import */
+    --up-chart-pos: #1f7a2c;
+    --up-chart-neg: #f08a2a;
+    --up-wire: #9a9e9a;
+    --up-text: var(--primary-text-color, #161716);
+    --up-muted: var(--secondary-text-color, #5c605c);
+    --up-line: var(--divider-color, rgba(127, 127, 127, 0.3));
+    --up-inset: var(--secondary-background-color, rgba(127, 127, 127, 0.12));
+    --up-node: var(--card-background-color, #ffffff);
+    padding: 12px 14px 14px;
+    overflow: hidden;
+    color: var(--up-text);
+  }
+  ha-card.dark {
+    --up-pos: #8fe36a;
+    --up-neg: #ff7d33;
+    --up-chart-pos: #5fb347;
+    --up-chart-neg: #d9541a;
+    --up-wire: #7b7b84;
+  }
+
+  .title {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+
+  /* ---------- flow diagram ---------- */
+  svg.flow {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .wire {
+    fill: none;
+    stroke: var(--up-wire);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    opacity: 0.35;
+  }
+  .wire.on {
+    opacity: 1;
+  }
+  .hub {
+    fill: var(--up-wire);
+  }
+
+  /* A stream of small dots; .lead is one large dot per main arm. Both move
+     from the start of the path to its end, .rev flips the direction. */
+  .stream,
+  .lead {
+    fill: none;
+    stroke-linecap: round;
+    animation: up-flow linear infinite;
+  }
+  /* Base speeds: the stream covers its 24 px period in 1 s, the lead dot runs
+     100 px/s. The card scales both through the animation playback rate. */
+  .stream {
+    --p: 24;
+    animation-duration: 1s;
+    stroke-width: 3;
+    stroke-dasharray: 0.1 23.9;
+    opacity: 0.8;
+  }
+  .stream.main {
+    stroke-width: 4;
+  }
+  .lead {
+    /* no CSS filter here: a filter on a straight line (zero-area bounding box) hides it */
+    stroke-width: 9;
+  }
+  .pos {
+    color: var(--up-pos);
+    stroke: var(--up-pos);
+  }
+  .neg {
+    color: var(--up-neg);
+    stroke: var(--up-neg);
+  }
+  .rev {
+    animation-direction: reverse;
+  }
+  @keyframes up-flow {
+    from {
+      stroke-dashoffset: var(--p);
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  .n.pos {
+    color: var(--up-pos);
+    stroke: none;
+  }
+  .n.neg {
+    color: var(--up-neg);
+    stroke: none;
+  }
+  .n.idle {
+    color: var(--up-wire);
+  }
+  .n.click {
+    cursor: pointer;
+  }
+  .n .body {
+    fill: var(--up-node);
+    stroke: currentColor;
+  }
+  .n .echo {
+    fill: none;
+    stroke: var(--up-wire);
+    stroke-width: 2;
+    opacity: 0.55;
+  }
+  .n .ic {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+  .n .ring-track {
+    fill: var(--up-node);
+    stroke: var(--up-line);
+    stroke-width: 3;
+  }
+  .n .ring {
+    fill: none;
+    stroke: var(--up-pos);
+    stroke-width: 3;
+    stroke-linecap: round;
+  }
+  /* ring moving outwards = the node supplies energy, inwards = it draws energy */
+  .pulse {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: up-pulse 1.8s ease-out infinite;
+  }
+  .pulse.in {
+    animation-direction: reverse;
+  }
+  @keyframes up-pulse {
+    from {
+      transform: scale(1);
+      opacity: 0.65;
+    }
+    to {
+      transform: scale(1.32);
+      opacity: 0;
+    }
+  }
+  .t-v {
+    fill: var(--up-text);
+    stroke: none;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .t-n {
+    fill: var(--up-muted);
+    stroke: none;
+  }
+
+  /* animation: auto - when the system asks for reduced motion, the small dots
+     keep flowing (they are the only thing that shows the direction of energy),
+     the large dot and the pulsing rings are dropped. always ignores the system
+     setting, off never animates. */
+  @media (prefers-reduced-motion: reduce) {
+    ha-card:not(.anim-always) .lead,
+    ha-card:not(.anim-always) .pulse {
+      animation: none;
+    }
+    ha-card:not(.anim-always) .lead,
+    ha-card:not(.anim-always) .pulse {
+      display: none;
+    }
+  }
+  ha-card.anim-off .stream,
+  ha-card.anim-off .lead,
+  ha-card.anim-off .pulse {
+    animation: none;
+  }
+  ha-card.anim-off .lead,
+  ha-card.anim-off .pulse {
+    display: none;
+  }
+
+  /* ---------- statistics ---------- */
+  .stats {
+    border-top: 1px solid var(--up-line);
+    margin-top: 6px;
+    padding-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .seg {
+    display: flex;
+    background: var(--up-inset);
+    border-radius: 9px;
+    padding: 2px;
+    gap: 2px;
+  }
+  .seg button {
+    flex: 1;
+    font: inherit;
+    font-size: 13px;
+    color: var(--up-muted);
+    background: transparent;
+    border: 0;
+    padding: 5px 4px;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  .seg button[aria-pressed='true'] {
+    background: var(--up-node);
+    color: var(--up-text);
+    font-weight: 500;
+    box-shadow: 0 0 0 1px var(--up-line);
+  }
+  .pager {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .pager button {
+    font: inherit;
+    font-size: 20px;
+    line-height: 1;
+    width: 36px;
+    height: 30px;
+    color: var(--up-text);
+    background: var(--up-inset);
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .pager button:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  .pager .pg-title {
+    font-weight: 600;
+    font-size: 15px;
+    text-align: center;
+    min-width: 0;
+  }
+  .seg button:focus-visible,
+  .pager button:focus-visible {
+    outline: 2px solid var(--up-pos);
+    outline-offset: 1px;
+  }
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .kpi {
+    background: var(--up-inset);
+    border-radius: 10px;
+    padding: 8px 10px;
+    min-width: 0;
+  }
+  .kpi .k {
+    color: var(--up-muted);
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .kpi .k i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: none;
+  }
+  .kpi .val {
+    font-size: 18px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .kpi .val small {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--up-muted);
+    margin-left: 3px;
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    font-size: 12px;
+    color: var(--up-muted);
+  }
+  .legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .legend i {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+  }
+  .chart {
+    position: relative;
+    touch-action: pan-y;
+  }
+  .chart svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .chart .gl {
+    stroke: var(--up-line);
+    stroke-width: 1;
+  }
+  .chart .ax {
+    fill: var(--up-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+  .chart .bar-pos {
+    fill: var(--up-chart-pos);
+  }
+  .chart .bar-neg {
+    fill: var(--up-chart-neg);
+  }
+  .chart .hit {
+    fill: transparent;
+  }
+  .chart .hit.active {
+    fill: var(--up-text);
+    opacity: 0.07;
+  }
+  .tip {
+    position: absolute;
+    top: 2px;
+    pointer-events: none;
+    background: var(--up-node);
+    border: 1px solid var(--up-line);
+    border-radius: 8px;
+    padding: 6px 9px;
+    font-size: 12px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+    transform: translateX(10px);
+    z-index: 1;
+  }
+  .tip.flip {
+    transform: translateX(calc(-100% - 10px));
+  }
+  .tip b {
+    display: block;
+    margin-bottom: 3px;
+  }
+  .tip div {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tip i {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+  }
+  .tip span {
+    margin-left: auto;
+    padding-left: 12px;
+    font-weight: 600;
+  }
+  .note {
+    font-size: 12px;
+    color: var(--up-muted);
+  }
+  .version {
+    font-size: 10px;
+    color: var(--up-muted);
+    text-align: right;
+    margin-top: 6px;
+  }
+`,mt=(t,e)=>{if(!e)return 0;const s=t.states?.[e];if(!s)return 0;const i=parseFloat(s.state);if(isNaN(i))return 0;return"kw"===(s.attributes?.unit_of_measurement||"").toLowerCase()?1e3*i:i},yt=(t,e,s)=>Math.abs(mt(t,s))-Math.abs(mt(t,e)),$t=(t,e)=>e.charge_entity||e.discharge_entity?yt(t,e.charge_entity,e.discharge_entity):mt(t,e.power_entity)*(e.invert?-1:1),vt=t=>void 0===t?[]:Array.isArray(t)?t:[t],wt=864e5,bt=t=>new Date(t.getFullYear(),t.getMonth(),t.getDate()),xt=async(t,e,s,i,r,n,o=100)=>{const a=((t,e,s,i)=>{const r=bt(new Date),n=t=>e=>Math.round((bt(e).getTime()-t.getTime())/wt),o=t=>t.toLocaleDateString(s,{day:"numeric",month:"numeric"});if("day"===t){const t=new Date(r.getFullYear(),r.getMonth(),r.getDate()-e),n=new Date(t.getFullYear(),t.getMonth(),t.getDate()+1);return{start:t,end:n,bucket:"hour",labels:Array.from({length:24},(t,e)=>`${e}:00`),title:0===e?i.today:1===e?i.yesterday:t.toLocaleDateString(s,{weekday:"short",day:"numeric",month:"numeric"}),index:e=>Math.floor((e.getTime()-t.getTime())/36e5)}}if("week"===t){const t=r.getDate()-(r.getDay()+6)%7-7*e,a=new Date(r.getFullYear(),r.getMonth(),t),h=new Date(a.getFullYear(),a.getMonth(),a.getDate()+7),l=new Date(a.getFullYear(),a.getMonth(),a.getDate()+6);return{start:a,end:h,bucket:"day",labels:Array.from({length:7},(t,e)=>new Date(a.getFullYear(),a.getMonth(),a.getDate()+e).toLocaleDateString(s,{weekday:"short"})),title:0===e?i.thisWeek:1===e?i.lastWeek:`${o(a)} – ${o(l)}`,index:n(a)}}if("month"===t){const t=new Date(r.getFullYear(),r.getMonth()-e,1),i=new Date(t.getFullYear(),t.getMonth()+1,1),o=Math.round((i.getTime()-t.getTime())/wt);return{start:t,end:i,bucket:"day",labels:Array.from({length:o},(t,e)=>`${e+1}.`),title:t.toLocaleDateString(s,{month:"long",year:"numeric"}),index:n(t)}}const a=new Date(r.getFullYear()-e,0,1),h=new Date(a.getFullYear()+1,0,1);return{start:a,end:h,bucket:"month",labels:Array.from({length:12},(t,e)=>new Date(a.getFullYear(),e,1).toLocaleDateString(s,{month:"short"})),title:String(a.getFullYear()),index:t=>t.getFullYear()===a.getFullYear()?t.getMonth():-1}})(s,i,r,n),h=a.labels.length,l="year"===s?"day":"hour",p=o*("day"===l?24:1),d=36e5*("day"===l?24:1);let c=0;const u=[...new Set([...e.pv,...e.gridIn,...e.gridOut,...e.batIn,...e.batOut])],g=await t.callWS({type:"recorder/statistics_during_period",start_time:a.start.toISOString(),end_time:a.end.toISOString(),statistic_ids:u,period:l,types:["change"],units:{energy:"kWh"}}),_=t=>{const e=new Array(h).fill(0);for(const s of t){let t=null;for(const i of g?.[s]??[]){const s=new Date(i.start).getTime(),r=null===t?1:Math.max(1,(s-t)/d);t=s;const n=a.index(new Date(i.start));n<0||n>=h||"number"!=typeof i.change||(i.change>p*r?c++:e[n]+=Math.max(0,i.change))}}return e},f=_(e.pv),m=_(e.gridIn),y=_(e.gridOut),$=_(e.batIn),v=_(e.batOut),w=f.map((t,e)=>Math.max(0,t+m[e]+v[e]-y[e]-$[e]));return{title:a.title,labels:a.labels,pv:f,cons:w,imp:m,exp:y,skipped:c}},kt="0.3.0",At=["day","week","month","year"],St={pv:"M5 13h14l2 7H3z M9 13l-1 7 M15 13l1 7 M4 16.5h16 M8.5 10a3.5 3.5 0 0 1 7 0 M12 3v1.5 M6.5 5.5l1 1 M17.5 5.5l-1 1",house:"M4 11l8-7 8 7v9H4z M10 20v-5h4v5",bat:"M3 8h16v8H3z M21 10.5v3 M6.5 10.5v3 M9.5 10.5v3 M12.5 10.5v3",grid:"M12 3L8 21 M12 3l4 18 M7 9h10 M5.5 9l1.5-3h10l1.5 3 M9.3 15h5.4 M10 12l4 3 M14 12l-4 3"},Mt={cs:{production:"Výroba",consumption:"Spotřeba",battery:"Baterie",grid:"Síť",import:"odběr",export:"dodávka",charging:"nabíjí",discharging:"vybíjí",idle:"v klidu",other:"Ostatní",day:"Den",week:"Týden",month:"Měsíc",year:"Rok",today:"Dnes",yesterday:"Včera",thisWeek:"Tento týden",lastWeek:"Minulý týden",pvEnergy:"Výroba FVE",houseEnergy:"Spotřeba domu",gridIn:"Odběr ze sítě",gridOut:"Dodávka do sítě",selfSufficiency:"Soběstačnost",selfConsumption:"Vlastní spotřeba",prev:"Předchozí období",next:"Další období",loading:"Načítám statistiky…",noStats:"Statistiky nejsou k dispozici. Nastav panel Energie v Home Assistantu nebo volbu statistics v kartě.",statsError:"Statistiky se nepodařilo načíst.",skipped:"Vynechané chybné skoky počítadla: {n}. Oprav je v Nástroje pro vývojáře → Statistiky."},en:{production:"Production",consumption:"Consumption",battery:"Battery",grid:"Grid",import:"import",export:"export",charging:"charging",discharging:"discharging",idle:"idle",other:"Other",day:"Day",week:"Week",month:"Month",year:"Year",today:"Today",yesterday:"Yesterday",thisWeek:"This week",lastWeek:"Last week",pvEnergy:"Solar production",houseEnergy:"Home consumption",gridIn:"Grid import",gridOut:"Grid export",selfSufficiency:"Self-sufficiency",selfConsumption:"Self-consumption",prev:"Previous period",next:"Next period",loading:"Loading statistics…",noStats:"No statistics available. Set up the Energy dashboard in Home Assistant or the statistics option of the card.",statsError:"Statistics could not be loaded.",skipped:"Meter glitches left out: {n}. Fix them in Developer tools → Statistics."}},Et=t=>t.reduce((t,e)=>t+e,0),Ct=t=>(t??[]).flatMap(t=>[t.power_entity,...Ct(t.children)]);let Pt=class extends ht{constructor(){super(...arguments),this._period="day",this._offset=0,this._statsState="idle",this._tip=null,this._request=0,this._swipeX=null,this._toggled=new Set,this._lastRender=0}static getStubConfig(){return{grid_entity:"sensor.grid_power"}}setConfig(t){if(!t.grid_entity)throw new Error("grid_entity je povinná.");this._config={...t},this._statIds=void 0,this._stats=void 0,this._statsState="idle"}getCardSize(){return!1===this._config?.show_statistics?8:14}connectedCallback(){super.connectedCallback(),this._timer=window.setInterval(()=>{0===this._offset&&"ready"===this._statsState&&this._loadStats()},3e5)}disconnectedCallback(){super.disconnectedCallback(),window.clearInterval(this._timer),window.clearTimeout(this._pending),this._pending=void 0}shouldUpdate(t){if(t.size>1||!t.has("hass"))return!0;const e=t.get("hass");if(!e||!this.hass||!this._config)return!0;if(e.themes?.darkMode!==this.hass.themes?.darkMode)return!0;if(!this._entities().some(t=>e.states[t]!==this.hass.states[t]))return!1;const s=this._lastRender+this._interval()-Date.now();return s<=0||(void 0===this._pending&&(this._pending=window.setTimeout(()=>{this._pending=void 0,this.requestUpdate()},s)),!1)}_interval(){const t=Number(this._config?.update_interval??1);return 1e3*Math.max(1,Math.min(20,isNaN(t)?1:t))}updated(){this._lastRender=Date.now(),this.renderRoot.querySelectorAll("[data-rate]").forEach(t=>{const e=Number(t.dataset.rate);for(const s of t.getAnimations?.()??[])e>0&&Math.abs(s.playbackRate-e)>.001&&s.updatePlaybackRate(e)}),"idle"===this._statsState&&this.hass&&!1!==this._config?.show_statistics&&this._loadStats()}render(){if(!this._config||!this.hass)return q;const t=!!this.hass.themes?.darkMode;return W`
+      <ha-card class="${t?"dark":""} anim-${this._config.animation??"auto"}">
+        ${this._config.name?W`<div class="title">${this._config.name}</div>`:q}
+        ${this._renderFlow()}
+        ${!1===this._config.show_statistics?q:this._renderStats()}
+        <div class="version">v${kt}</div>
+      </ha-card>
+    `}get _w(){return(this.hass?.language??"en").startsWith("cs")?Mt.cs:Mt.en}_entities(){const t=this._config;return[t.grid_entity,t.grid_export_entity,t.pv_total_entity,t.battery_total_entity,t.battery_charge_entity,t.battery_discharge_entity,...(t.pv_strings??[]).map(t=>t.power_entity),...(t.batteries??[]).flatMap(t=>[t.power_entity,t.charge_entity,t.discharge_entity,t.soc_entity]),...Ct(t.appliances)].filter(t=>!!t)}_num(t,e){return t.toLocaleString(this.hass?.language,{minimumFractionDigits:e,maximumFractionDigits:e})}_power(t){const e=Math.abs(t);return this._config?.show_w_not_kw||e<1e3?`${Math.round(e)} W`:`${this._num(e/1e3,1)} kW`}_energy(t){return t>=1e3?[this._num(t/1e3,2),"MWh"]:[this._num(t,1),"kWh"]}_moreInfo(t){t&&function(t,e,s,i){i=i||{},s=null==s?{}:s;var r=new Event(e,{bubbles:void 0===i.bubbles||i.bubbles,cancelable:Boolean(i.cancelable),composed:void 0===i.composed||i.composed});r.detail=s,t.dispatchEvent(r)}(this,"hass-more-info",{entityId:t})}_speed(t){const e=this._config?.max_power??1e4,s=Math.min(t,e)/e,i=(8+132*Math.pow(s,.8))*Math.max(.1,this._config?.animation_speed??1);return Math.min(i,200)}_wire(t,e,s,i,r,n=!1){const o=`M${t[0]} ${t[1]} L${e[0]} ${e[1]}`;if(s<=5)return B`<path class="wire" d=${o}></path>`;const a=this._speed(s),h=Math.hypot(e[0]-t[0],e[1]-t[1]),l=n?"rev":"";return B`
+      <path class="wire on" d=${o}></path>
+      <path class="stream ${i} ${r?"main":""} ${l}" d=${o}
+        data-rate=${(a/24).toFixed(3)}></path>
+      ${r?B`<path class="lead ${i} ${l}" d=${o} data-rate=${(a/100).toFixed(3)}
+            style=${`--p:${h};stroke-dasharray:0.1 ${h};animation-duration:${(h/100).toFixed(2)}s`}></path>`:q}
+    `}_text(t,e,s,i,r,n="middle"){return B`<text x=${t} y=${e} class=${s} font-size=${i} text-anchor=${n}>${r}</text>`}_mainNode(t,e,s,i,r){return B`
+      <g class="n ${e} ${r?"click":""}" @click=${()=>this._moreInfo(r)}>
+        ${i?B`<circle class="pulse ${i}" cx=${t[0]} cy=${t[1]} r="37"></circle>`:q}
+        <circle class="echo" cx=${t[0]+8} cy=${t[1]} r="36"></circle>
+        <circle class="body" cx=${t[0]} cy=${t[1]} r="36" stroke-width="3"></circle>
+        <path class="ic" transform=${`translate(${t[0]-16} ${t[1]-16}) scale(1.3333)`} d=${St[s]}></path>
+      </g>
+    `}_smallNode(t,e,s,i,r=22,n){const o=n??(i?()=>this._moreInfo(i):void 0);return B`
+      <g class="n ${e} ${o?"click":""}" @click=${o??q}>
+        <circle class="body" cx=${t[0]} cy=${t[1]} r=${r} stroke-width="2"></circle>
+        ${this._text(t[0],t[1]+(r<20?3:4),"t-v",r<20?8.5:10.5,s)}
+      </g>
+    `}_appTree(t,e){return(t??[]).map((t,s)=>{const i=`${e}${s}`,r=this._appTree(t.children,`${i}.`),n=this._toggled.has(i);return{name:t.name,w:t.power_entity?Math.max(0,mt(this.hass,t.power_entity)):Et(r.map(t=>t.w)),entity:t.power_entity,threshold:t.on_threshold_w??5,kids:r,key:i,open:r.length>0&&(t.collapsed?n:!n)}})}_toggle(t){const e=new Set(this._toggled);e.delete(t)||e.add(t),this._toggled=e}_renderFlow(){const t=this._config,e=this.hass,s=this._w,i=((t,e)=>{const s=Math.max(0,e.pv_total_entity?mt(t,e.pv_total_entity):(e.pv_strings??[]).reduce((e,s)=>e+mt(t,s.power_entity),0)),i=e.battery_charge_entity||e.battery_discharge_entity?yt(t,e.battery_charge_entity,e.battery_discharge_entity):e.battery_total_entity?mt(t,e.battery_total_entity)*(e.battery_invert?-1:1):(e.batteries??[]).reduce((e,s)=>e+$t(t,s),0),r=e.grid_export_entity?mt(t,e.grid_entity)-mt(t,e.grid_export_entity):mt(t,e.grid_entity)*(e.grid_invert?-1:1);return{pv_total_w:s,grid_w:r,house_w:Math.max(0,s+r+i),battery_total_w:i}})(e,t),r=t.pv_strings??[],n=t.batteries??[],o=r.length>0||!!t.pv_total_entity,a=n.length>0||!!(t.battery_total_entity||t.battery_charge_entity||t.battery_discharge_entity),h=r.map(t=>Math.max(0,mt(e,t.power_entity))),l=n.map(t=>$t(e,t)),p=this._appTree(t.appliances,"");p.length&&!1!==t.show_other&&p.push({name:s.other,w:Math.max(0,i.house_w-Et(p.map(t=>t.w))),entity:void 0,threshold:5,kids:[],key:"other",open:!1});const d=[],c=(t,e)=>t.forEach(t=>{d.push({...t,depth:e}),t.open&&c(t.kids,e+1)});c(p,0);const u=p.some(t=>t.kids.length>0),g=u?44:100,_=t=>0===t?u?20:22:15,f=r.length?150:56,m=o?f+120:96,y=[240,m],$=[240,f],v=[100,m],w=[380,m],b=[240,m+120],x=Math.min(110,400/Math.max(1,r.length)),k=r.map((t,e)=>[240+(e-(r.length-1)/2)*x,50]),A=[];d.forEach((t,e)=>{const s=d[e-1],i=s?0===t.depth?0===s.depth?50:46:s.depth<t.depth?42:36:0;A.push([g+34*t.depth,e?A[e-1][1]+i:m+90])});const S=n.map((t,e)=>[380,m+92+56*e]),M=Math.max(m+216,d.length?A[d.length-1][1]+36:0,n.length?S[n.length-1][1]+40:0),E=t=>Math.abs(t)>5,C=i.grid_w,P=i.battery_total_w,O=[];o&&O.push(this._wire($,y,i.pv_total_w,"pos",!0)),O.push(this._wire(y,v,i.house_w,"neg",!0)),O.push(this._wire(b,y,Math.abs(C),C>=0?"neg":"pos",!0,C<0)),a&&O.push(this._wire(w,y,Math.abs(P),"pos",!0,P<0)),r.forEach((t,e)=>O.push(this._wire(k[e],$,h[e],"pos",!1)));const D=(t,e)=>{let s=0,i=e;for(;i<d.length&&d[i].depth>t;i++)d[i].depth===t+1&&(s+=d[i].w);if(0===t)for(;i<d.length;i++)0===d[i].depth&&(s+=d[i].w);return s},N=[v];d.forEach((t,e)=>{const s=A[e];if(0===t.depth)O.push(this._wire(N[0],s,D(0,e),"neg",!1));else{const i=[g+34*(t.depth-1),s[1]];O.push(this._wire(N[t.depth-1],i,D(t.depth-1,e),"neg",!1)),O.push(this._wire(i,s,t.w,"neg",!1)),N[t.depth-1]=i}N[t.depth]=s});const T=n.length?S[n.length-1][1]:m,U=(t,e)=>{const s=e[0]+_(t.depth)+8,i=e[1]>m+76&&e[1]<m+212?196:a&&e[1]<T+34?290:472,r=t.kids.length?t.open?"▾ ":"▸ ":"";return this._text(s,e[1]+4,"t-n",t.depth?10:11,((t,e,s=11)=>{const i=Math.max(3,Math.floor(e/(.56*s)));return t.length>i?t.slice(0,i-1).trimEnd()+"…":t})(r+t.name,i-s,t.depth?10:11),"start")};n.forEach((t,e)=>{const s=Et(l.slice(e));O.push(this._wire(e?S[e-1]:w,S[e],Math.abs(s),"pos",!1,s>=0))});const I=P>5?s.discharging:P<-5?s.charging:s.idle,H=C>5?s.import:C<-5?s.export:s.idle,R=2*Math.PI*24;return W`
+      <svg class="flow" viewBox="0 0 480 ${M}" role="img">
+        ${O}
+        <circle class="hub" cx=${y[0]} cy=${y[1]} r="7"></circle>
+
+        ${o?B`
+            ${this._mainNode($,E(i.pv_total_w)?"pos":"idle","pv",E(i.pv_total_w)?"out":null,t.pv_total_entity)}
+            ${this._text(292,f-3,"t-v",15,this._power(i.pv_total_w),"start")}
+            ${this._text(292,f+15,"t-n",13,s.production,"start")}
+            ${r.map((t,e)=>B`
+                ${this._smallNode(k[e],E(h[e])?"pos":"idle",this._power(h[e]),t.power_entity)}
+                ${t.name?this._text(k[e][0],18,"t-n",11,t.name):q}
+              `)}`:q}
+
+        ${this._mainNode(v,E(i.house_w)?"neg":"idle","house",E(i.house_w)?"in":null)}
+        ${this._text(100,m-66,"t-v",15,this._power(i.house_w))}
+        ${this._text(100,m-48,"t-n",13,s.consumption)}
+        ${d.map((t,e)=>B`
+            ${this._smallNode(A[e],t.w>t.threshold?"neg":"idle",this._power(t.w),t.entity,_(t.depth),t.kids.length?()=>this._toggle(t.key):void 0)}
+            ${U(t,A[e])}
+          `)}
+
+        ${a?B`
+            ${this._mainNode(w,E(P)?"pos":"idle","bat",P>5?"out":P<-5?"in":null,t.battery_total_entity)}
+            ${this._text(380,m-66,"t-v",15,this._power(P))}
+            ${this._text(380,m-48,"t-n",13,`${s.battery} · ${I}`)}
+            ${n.map((t,s)=>{const i=S[s],r=Math.max(0,Math.min(100,parseFloat(e.states?.[t.soc_entity]?.state??"")||0)),n=l[s]>5?"−":l[s]<-5?"+":"";return B`
+                <g class="n click" @click=${()=>this._moreInfo(t.power_entity??t.soc_entity)}>
+                  <circle class="ring-track" cx=${i[0]} cy=${i[1]} r="24"></circle>
+                  <circle class="ring" cx=${i[0]} cy=${i[1]} r="24"
+                    stroke-dasharray=${R.toFixed(1)}
+                    stroke-dashoffset=${(R*(1-r/100)).toFixed(1)}
+                    transform=${`rotate(-90 ${i[0]} ${i[1]})`}></circle>
+                  ${this._text(i[0],i[1]+4,"t-v",11,`${Math.round(r)} %`)}
+                </g>
+                ${t.name?this._text(346,i[1]-2,"t-n",11,t.name,"end"):q}
+                ${this._text(346,i[1]+(t.name?13:4),"t-v",11,n+this._power(l[s]),"end")}
+              `})}`:q}
+
+        ${this._mainNode(b,C>5?"neg":C<-5?"pos":"idle","grid",C>5?"out":C<-5?"in":null,t.grid_entity)}
+        ${this._text(240,m+180,"t-n",13,`${s.grid} · ${H}`)}
+        ${this._text(240,m+200,"t-v",15,this._power(C))}
+      </svg>
+    `}async _loadStats(){const t=this.hass,e=this._config;if(!t||!e)return;const s=++this._request;"ready"!==this._statsState&&(this._statsState="loading");try{if(void 0===this._statIds&&(this._statIds=await(async(t,e)=>{const s={pv:[],gridIn:[],gridOut:[],batIn:[],batOut:[]},i=e.statistics,r=!!i&&[i.pv,i.grid_import,i.grid_export,i.battery_charge,i.battery_discharge].some(t=>vt(t).length);if(i&&r)s.pv=vt(i.pv),s.gridIn=vt(i.grid_import),s.gridOut=vt(i.grid_export),s.batIn=vt(i.battery_charge),s.batOut=vt(i.battery_discharge);else try{const e=await t.callWS({type:"energy/get_prefs"});for(const t of e?.energy_sources??[])if("solar"===t.type&&t.stat_energy_from&&s.pv.push(t.stat_energy_from),"battery"===t.type&&(t.stat_energy_from&&s.batOut.push(t.stat_energy_from),t.stat_energy_to&&s.batIn.push(t.stat_energy_to)),"grid"===t.type){for(const e of t.flow_from??[])e.stat_energy_from&&s.gridIn.push(e.stat_energy_from);for(const e of t.flow_to??[])e.stat_energy_to&&s.gridOut.push(e.stat_energy_to);t.stat_energy_from&&s.gridIn.push(t.stat_energy_from),t.stat_energy_to&&s.gridOut.push(t.stat_energy_to)}}catch{return null}return s.pv.length||s.gridIn.length?s:null})(t,e)),s!==this._request)return;if(!this._statIds)return void(this._statsState="none");const i=await xt(t,this._statIds,this._period,this._offset,t.language??"en",this._w,Number(e.statistics?.max_power_kw)>0?Number(e.statistics.max_power_kw):100);if(s!==this._request)return;this._stats=i,this._statsState="ready"}catch(t){if(s!==this._request)return;console.error("UltimatePower Card: statistics failed",t),this._statsState="error"}}_setPeriod(t){t!==this._period&&(this._period=t,this._offset=0,this._tip=null,this._loadStats())}_page(t){const e=Math.max(0,Math.min(120,this._offset+t));e!==this._offset&&(this._offset=e,this._tip=null,this._loadStats())}_onPointerMove(t){const e=t.target?.getAttribute?.("data-i");this._tip=null==e?null:Number(e)}_onPointerUp(t){if(null===this._swipeX)return;const e=t.clientX-this._swipeX;this._swipeX=null,Math.abs(e)>50&&this._page(e>0?1:-1)}_renderStats(){const t=this._w,e=this._stats;return W`
+      <div class="stats">
+        <div class="seg" role="group">
+          ${At.map(e=>W`<button type="button" aria-pressed=${e===this._period?"true":"false"}
+              @click=${()=>this._setPeriod(e)}>${t[e]}</button>`)}
+        </div>
+        ${"none"===this._statsState?W`<div class="note">${t.noStats}</div>`:"error"===this._statsState?W`<div class="note">${t.statsError}</div>`:e?W`
+              <div class="pager">
+                <button type="button" aria-label=${t.prev} ?disabled=${this._offset>=120}
+                  @click=${()=>this._page(1)}>‹</button>
+                <div class="pg-title">${e.title}</div>
+                <button type="button" aria-label=${t.next} ?disabled=${0===this._offset}
+                  @click=${()=>this._page(-1)}>›</button>
+              </div>
+              ${this._renderKpis(e)}
+              <div class="legend">
+                <span><i style="background:var(--up-chart-pos)"></i>${t.pvEnergy}</span>
+                <span><i style="background:var(--up-chart-neg)"></i>${t.houseEnergy}</span>
+                <span>kWh</span>
+              </div>
+              ${this._renderChart(e)}
+              ${e.skipped?W`<div class="note">${t.skipped.replace("{n}",String(e.skipped))}</div>`:q}
+            `:W`<div class="note">${t.loading}</div>`}
+      </div>
+    `}_renderKpis(t){const e=this._w,s=Et(t.pv),i=Et(t.cons),r=Et(t.imp),n=Et(t.exp),o=(t,e)=>e>0?[this._num(Math.max(0,Math.min(100,t/e*100)),0),"%"]:["–",""],a=[[e.pvEnergy,this._energy(s),"var(--up-pos)"],[e.houseEnergy,this._energy(i),"var(--up-neg)"],[e.gridIn,this._energy(r),"var(--up-neg)"],[e.gridOut,this._energy(n),"var(--up-pos)"],[e.selfSufficiency,o(i-r,i),"var(--up-pos)"],[e.selfConsumption,o(s-n,s),"var(--up-pos)"]];return W`
+      <div class="kpis">
+        ${a.map(([t,[e,s],i])=>W`
+            <div class="kpi">
+              <div class="k"><i style=${`background:${i}`}></i>${t}</div>
+              <div class="val">${e}<small>${s}</small></div>
+            </div>
+          `)}
+      </div>
+    `}_renderChart(t){const e=this._w,s=440,i=36,r=4,n=8,o=s-i-r,a=200-n-22,h=t.labels.length,l=o/h,p=Math.max(.1,...t.pv,...t.cons),d=p/4,c=Math.pow(10,Math.floor(Math.log10(d))),u=d/c,g=(u<=1?1:u<=2?2:u<=5?5:10)*c,_=Math.ceil(p/g)*g,f=t=>n+a-t/_*a,m=Math.max(2,Math.min(14,.4*(l-2))),y=l>12?2:1,$=(t,e)=>{const s=f(0)-f(e);if(s<=0)return"";const i=Math.min(4,m/2,s),r=f(e);return`M${t},${r+s}V${r+i}Q${t},${r} ${t+i},${r}H${t+m-i}Q${t+m},${r} ${t+m},${r+i}V${r+s}Z`},v=[];for(let t=0;t<=_+1e-9;t+=g)v.push(t);const w=null!==this._tip&&this._tip<h?this._tip:null,b=null===w?0:(i+l*(w+.5))/s*100;return W`
+      <div class="chart"
+        @pointermove=${this._onPointerMove}
+        @pointerdown=${t=>{this._swipeX=t.clientX,this._onPointerMove(t)}}
+        @pointerup=${this._onPointerUp}
+        @pointercancel=${()=>{this._swipeX=null}}
+        @pointerleave=${()=>{this._tip=null}}>
+        <svg viewBox="0 0 ${s} ${200}" role="img">
+          ${v.map(t=>B`
+              <line class="gl" x1=${i} x2=${s-r} y1=${f(t)} y2=${f(t)}></line>
+              <text class="ax" x=${i-6} y=${f(t)+4} text-anchor="end">${this._num(t,g<1?1:0)}</text>
+            `)}
+          ${t.labels.map((e,s)=>{const r=i+l*(s+.5);return B`
+              <path class="bar-pos" d=${$(r-y/2-m,t.pv[s])}></path>
+              <path class="bar-neg" d=${$(r+y/2,t.cons[s])}></path>
+              ${(t=>h<=12||(24===h?t%3==0:0===t||(t+1)%5==0))(s)?B`<text class="ax" x=${r} y=${194} text-anchor="middle">${e.replace(":00","")}</text>`:q}
+              <rect class="hit ${w===s?"active":""}" data-i=${s}
+                x=${i+l*s} y=${n} width=${l} height=${a}></rect>
+            `})}
+        </svg>
+        ${null===w?q:W`
+              <div class="tip ${b>55?"flip":""}" style=${`left:${b}%`}>
+                <b>${t.labels[w]}</b>
+                <div><i style="background:var(--up-chart-pos)"></i>${e.pvEnergy}<span>${this._num(t.pv[w],1)} kWh</span></div>
+                <div><i style="background:var(--up-chart-neg)"></i>${e.houseEnergy}<span>${this._num(t.cons[w],1)} kWh</span></div>
+              </div>
+            `}
+      </div>
+    `}};Pt.styles=ft,t([ct({attribute:!1})],Pt.prototype,"hass",void 0),t([ut()],Pt.prototype,"_config",void 0),t([ut()],Pt.prototype,"_period",void 0),t([ut()],Pt.prototype,"_offset",void 0),t([ut()],Pt.prototype,"_stats",void 0),t([ut()],Pt.prototype,"_statsState",void 0),t([ut()],Pt.prototype,"_tip",void 0),t([ut()],Pt.prototype,"_toggled",void 0),Pt=t([(t=>(e,s)=>{void 0!==s?s.addInitializer(()=>{customElements.define(t,e)}):customElements.define(t,e)})("ultimate-power-card")],Pt),window.customCards=window.customCards||[],window.customCards.push({type:"ultimate-power-card",name:"UltimatePower Card",description:"Power flow between solar, grid, batteries and the home, with multiple strings, batteries and appliances, plus energy statistics.",preview:!1}),console.info(`%c UltimatePower-Card %c v${kt} `,"color:#8fe36a;background:#111112;font-weight:bold","color:#ff7d33;background:#111112");export{Pt as UltimatePowerCard};
+</script>
+<script type="module">
+  customElements.define('ha-card', class extends HTMLElement {});
+  const $ = (id) => document.getElementById(id);
+  const S = (v, u = 'W') => ({ state: String(v), attributes: { unit_of_measurement: u } });
+  const kw = (w) => (w >= 1000 ? (w / 1000).toLocaleString('cs', { maximumFractionDigits: 1 }) + ' kW' : Math.round(w) + ' W');
+
+  const dark = () => {
+    const forced = document.documentElement.getAttribute('data-theme');
+    return forced ? forced === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  };
+
+  // Sample long-term statistics, shaped like the recorder API answers.
+  const callWS = async (msg) => {
+    if (msg.type === 'energy/get_prefs') {
+      return { energy_sources: [
+        { type: 'solar', stat_energy_from: 'e.pv' },
+        { type: 'grid', stat_energy_from: 'e.in', stat_energy_to: 'e.out' },
+        { type: 'battery', stat_energy_from: 'e.bout', stat_energy_to: 'e.bin' } ] };
+    }
+    const start = new Date(msg.start_time).getTime();
+    const end = Math.min(new Date(msg.end_time).getTime(), Date.now());
+    const step = msg.period === 'hour' ? 3600e3 : 86400e3;
+    const res = {};
+    for (const id of msg.statistic_ids) {
+      res[id] = [];
+      for (let t = start, k = 0; t < end; t += step, k++) {
+        const d = new Date(t), h = d.getHours();
+        const season = 0.35 + 0.65 * Math.max(0, Math.sin(((d.getMonth() + d.getDate() / 30 - 2) / 12) * Math.PI * 2 * 0.5));
+        const wob = 0.75 + 0.5 * Math.abs(Math.sin(Math.floor(t / 86400e3) * 1.7));
+        const sunH = Math.max(0, Math.sin(((h - 6) / 12) * Math.PI)) * 5.5 * season * wob;
+        const hourly = { 'e.pv': sunH, 'e.in': h < 6 || h > 19 ? 0.9 : 0.15, 'e.out': sunH * 0.3, 'e.bin': sunH * 0.2, 'e.bout': h > 17 ? 0.8 : 0 };
+        const daily = { 'e.pv': 34 * season * wob, 'e.in': 9, 'e.out': 10 * season * wob, 'e.bin': 7 * season * wob, 'e.bout': 6.5 * season * wob };
+        res[id].push({ start: t, end: t + step, change: (msg.period === 'hour' ? hourly : daily)[id] });
+      }
+    }
+    return res;
+  };
+
+  const config = () => ({
+    type: 'custom:ultimate-power-card', name: 'Energie', grid_entity: 'sensor.grid',
+    show_statistics: $('stats').checked, show_other: $('other').checked,
+    pv_strings: [ { power_entity: 'sensor.pv1', name: 'Střecha' }, { power_entity: 'sensor.pv2', name: 'Garáže' }, { power_entity: 'sensor.pv3', name: 'Za garáží' } ],
+    batteries: [
+      { power_entity: 'sensor.b1', soc_entity: 'sensor.s1', name: 'Deye' },
+      { charge_entity: 'sensor.bc', discharge_entity: 'sensor.bd', soc_entity: 'sensor.s2', name: 'Growatt' } ],
+    appliances: [
+      { name: 'Přízemí', power_entity: 'sensor.prizemi' },
+      { name: '2NP', power_entity: 'sensor.np2', children: [
+        { name: 'Pračka', power_entity: 'sensor.pracka' },
+        { name: 'Sušička', power_entity: 'sensor.susicka' },
+        { name: 'Servery', power_entity: 'sensor.servery' } ] },
+      { name: 'Dílna', power_entity: 'sensor.dilna', collapsed: true, children: [
+        { name: 'Bazén', power_entity: 'sensor.bazen' },
+        { name: 'Bazénové tepelné čerpadlo', power_entity: 'sensor.bazen_tc' } ] },
+      { name: 'Tepelné čerpadlo', power_entity: 'sensor.tc' },
+      { name: 'Wallbox', power_entity: 'sensor.wb' } ],
+  });
+
+  const card = document.createElement('ultimate-power-card');
+  card.setConfig(config());
+
+  const refresh = () => {
+    const v = (id) => Number($(id).value);
+    for (const id of ['pv', 'pracka', 'bazen', 'tc', 'wb']) $(id + '-o').textContent = kw(v(id));
+    const pv = v('pv');
+    const np2 = v('pracka') + 180 + 70;          // washer + servers + the rest of the flat
+    const dilna = 350 + v('bazen');
+    const house = 820 + np2 + dilna + v('tc') + v('wb') + 370;   // 370 W is not covered by any appliance
+    const bat = Math.max(-3000, Math.min(3000, house - pv));     // + discharging, - charging
+    const b1 = Math.round(bat * 0.6), b2 = bat - b1;
+    card.hass = {
+      language: 'cs', themes: { darkMode: dark() }, callWS,
+      states: {
+        'sensor.grid': S(house - pv - bat),
+        'sensor.pv1': S(Math.round(pv * 0.45)), 'sensor.pv2': S(Math.round(pv * 0.32)), 'sensor.pv3': S(Math.round(pv * 0.23)),
+        'sensor.b1': S(b1), 'sensor.s1': S(64, '%'),
+        'sensor.bc': S(Math.max(0, -b2)), 'sensor.bd': S(Math.max(0, b2)), 'sensor.s2': S(58, '%'),
+        'sensor.prizemi': S(820), 'sensor.np2': S(np2), 'sensor.pracka': S(v('pracka')), 'sensor.susicka': S(0), 'sensor.servery': S(180),
+        'sensor.dilna': S(dilna), 'sensor.bazen': S(350), 'sensor.bazen_tc': S(v('bazen')),
+        'sensor.tc': S(v('tc') / 1000, 'kW'), 'sensor.wb': S(v('wb') / 1000, 'kW'),
+      },
+    };
+  };
+
+  for (const id of ['pv', 'pracka', 'bazen', 'tc', 'wb']) $(id).addEventListener('input', refresh);
+  for (const id of ['stats', 'other']) $(id).addEventListener('change', () => { card.setConfig(config()); refresh(); });
+  new MutationObserver(refresh).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', refresh);
+
+  refresh();
+  $('mount').appendChild(card);
+</script>
